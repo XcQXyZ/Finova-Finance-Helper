@@ -43,11 +43,6 @@ const state = {
 
 let authBusy = false;
 
-
-/* =========================
-   TOAST / ERROR
-========================= */
-
 function toast(msg) {
   $("toast").textContent = msg;
   $("toast").classList.add("show");
@@ -114,9 +109,7 @@ document.querySelectorAll("[data-auth]").forEach(button => {
 
     document
       .querySelectorAll(".tab")
-      .forEach(tab =>
-        tab.classList.toggle("active", tab === button)
-      );
+      .forEach(tab => tab.classList.toggle("active", tab === button));
 
     $("authSubmit").textContent =
       state.authMode === "login" ? "Masuk" : "Daftar";
@@ -155,7 +148,6 @@ $("authForm").onsubmit = async event => {
   const originalText = button.textContent;
 
   button.disabled = true;
-
   button.textContent =
     state.authMode === "login"
       ? "Memproses..."
@@ -171,7 +163,10 @@ $("authForm").onsubmit = async event => {
           password
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error("LOGIN ERROR:", error);
+        throw error;
+      }
 
       if (!data?.session) {
         toast("Login belum menghasilkan session. Coba lagi.");
@@ -192,7 +187,10 @@ $("authForm").onsubmit = async event => {
           password
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error("REGISTER ERROR:", error);
+        throw error;
+      }
 
       if (data?.session) {
 
@@ -232,7 +230,6 @@ $("authForm").onsubmit = async event => {
     authBusy = false;
 
     button.disabled = false;
-
     button.textContent =
       state.authMode === "login"
         ? "Masuk"
@@ -278,6 +275,10 @@ async function showApp(session) {
 }
 
 
+/* =========================
+   CHECK SESSION SAAT APP DIBUKA
+========================= */
+
 async function initAuth() {
 
   try {
@@ -287,7 +288,9 @@ async function initAuth() {
       error
     } = await db.auth.getSession();
 
-    if (error) throw error;
+    if (error) {
+      throw error;
+    }
 
     if (session?.user) {
       await showApp(session);
@@ -306,6 +309,10 @@ async function initAuth() {
 }
 
 
+/* =========================
+   PERUBAHAN LOGIN / LOGOUT
+========================= */
+
 db.auth.onAuthStateChange(async (event, session) => {
 
   console.log(
@@ -315,7 +322,6 @@ db.auth.onAuthStateChange(async (event, session) => {
   );
 
   if (event === "SIGNED_IN" && session?.user) {
-
     state.user = session.user;
 
     if ($("appView").classList.contains("hidden")) {
@@ -324,55 +330,18 @@ db.auth.onAuthStateChange(async (event, session) => {
   }
 
   if (event === "SIGNED_OUT") {
-
     state.user = null;
-
     showAuth();
   }
 });
 
 
-/* =========================
-   NAVIGASI
-========================= */
-
-document.querySelectorAll("[data-page]").forEach(b => {
-  b.onclick = () => showPage(b.dataset.page);
-});
-
-function showPage(p) {
-
-  document
-    .querySelectorAll(".page")
-    .forEach(x =>
-      x.classList.toggle(
-        "active",
-        x.id === "page-" + p
-      )
-    );
-
-  document
-    .querySelectorAll(".nav")
-    .forEach(x =>
-      x.classList.toggle(
-        "active",
-        x.dataset.page === p
-      )
-    );
-
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
-
-  if (p === "reports") {
-    renderReports();
-  }
-}
+/* Jalankan pemeriksaan session */
+initAuth();
 
 
 /* =========================
-   LOGOUT / THEME
+   LOGOUT
 ========================= */
 
 $("logoutBtn").onclick = async () => {
@@ -391,69 +360,291 @@ $("logoutBtn").onclick = async () => {
   }
 };
 
+$("logoutBtn").onclick=async()=>{await db.auth.signOut();location.reload()};
 
-$("themeBtn").onclick = async () => {
-
+$("themeBtn").onclick=async()=>{
   document.body.classList.toggle("light");
-
   await saveSettings({
-    theme: document.body.classList.contains("light")
-      ? "light"
-      : "dark"
-  });
+    theme:document.body.classList.contains("light")?"light":"dark"
+  })
 };
+
+document.querySelectorAll("[data-page]").forEach(
+  b=>b.onclick=()=>showPage(b.dataset.page)
+);
+
+function showPage(p){
+  document
+    .querySelectorAll(".page")
+    .forEach(x=>x.classList.toggle("active",x.id==="page-"+p));
+
+  document
+    .querySelectorAll(".nav")
+    .forEach(x=>x.classList.toggle("active",x.dataset.page===p));
+
+  window.scrollTo({
+    top:0,
+    behavior:"smooth"
+  });
+
+  if(p==="reports")renderReports();
+}
 
 
 /* =========================
-   LOAD DATA
+   MENU LAINNYA
 ========================= */
 
-async function loadAll() {
+function renderCategoryManager(){
 
-  const uid = state.user.id;
+  const list=state.categories.map(c=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+      <span>
+        ${esc(c.icon)}
+        ${esc(c.name)}
+        <small class="muted">
+          ${c.type==="income"?"Pemasukan":"Pengeluaran"}
+        </small>
+      </span>
 
-  const results = await Promise.all([
+      <button
+        class="link-btn small danger-text"
+        onclick="deleteCategory('${c.id}')">
+        Hapus
+      </button>
+    </div>
+  `).join("");
+
+  openModal(
+    "Kelola kategori",
+    `<div class="stack">
+
+      <div>
+        ${
+          list ||
+          `<div class="muted">Belum ada kategori.</div>`
+        }
+      </div>
+
+      <form
+        id="categoryForm"
+        class="form-grid"
+        style="margin-top:14px">
+
+        <div>
+          <label>Ikon</label>
+          <input
+            id="catIcon"
+            value="📌"
+            maxlength="4">
+        </div>
+
+        <div>
+          <label>Nama</label>
+          <input
+            id="catName"
+            placeholder="Contoh: Kopi"
+            required>
+        </div>
+
+        <div>
+          <label>Jenis</label>
+          <select id="catType">
+            <option value="expense">Pengeluaran</option>
+            <option value="income">Pemasukan</option>
+          </select>
+        </div>
+
+        <div class="form-actions full-col">
+          <button class="primary">
+            Tambah kategori
+          </button>
+        </div>
+
+      </form>
+
+    </div>`
+  );
+
+  $("categoryForm").onsubmit=async e=>{
+    e.preventDefault();
+
+    const p={
+      user_id:state.user.id,
+      icon:$("catIcon").value||"📌",
+      name:$("catName").value.trim(),
+      type:$("catType").value
+    };
+
+    if(!p.name)return;
+
+    const r=await db
+      .from("categories")
+      .insert(p);
+
+    if(r.error){
+      fail(r.error);
+      return;
+    }
+
+    const q=await db
+      .from("categories")
+      .select("*")
+      .eq("user_id",state.user.id)
+      .order("name");
+
+    if(q.error){
+      fail(q.error);
+      return;
+    }
+
+    state.categories=q.data||[];
+
+    renderAll();
+    renderCategoryManager();
+
+    toast("Kategori ditambahkan.");
+  };
+}
+
+window.deleteCategory=async id=>{
+
+  if(!confirm("Hapus kategori ini?"))return;
+
+  const r=await db
+    .from("categories")
+    .delete()
+    .eq("id",id)
+    .eq("user_id",state.user.id);
+
+  if(r.error){
+    fail(r.error);
+    return;
+  }
+
+  state.categories=
+    state.categories.filter(c=>c.id!==id);
+
+  renderAll();
+  renderCategoryManager();
+
+  toast("Kategori dihapus.");
+};
+
+$("categoriesBtn").onclick=renderCategoryManager;
+
+$("recurringBtn").onclick=()=>openModal(
+  "Transaksi berulang",
+  `<div class="muted">
+    Menu ini sudah aktif, tetapi fitur transaksi berulang belum kita implementasikan.
+    Kita biarkan aman dulu supaya fitur transaksi utama tetap stabil.
+  </div>`
+);
+
+$("notificationBtn").onclick=()=>{
+
+  openModal(
+    "Notifikasi pengingat",
+    `<div class="stack">
+
+      <p class="muted">
+        Atur apakah Finova boleh menggunakan pengaturan pengingat.
+      </p>
+
+      <label style="display:flex;gap:10px;align-items:center">
+        <input
+          id="notifToggle"
+          type="checkbox"
+          ${state.settings?.notifications!==false?"checked":""}>
+        Aktifkan pengingat
+      </label>
+
+      <div class="form-actions">
+        <button
+          class="primary"
+          id="saveNotif">
+          Simpan
+        </button>
+      </div>
+
+    </div>`
+  );
+
+  $("saveNotif").onclick=async()=>{
+
+    const enabled=$("notifToggle").checked;
+
+    const r=await db
+      .from("app_settings")
+      .upsert({
+        user_id:state.user.id,
+        notifications:enabled,
+        updated_at:new Date().toISOString()
+      });
+
+    if(r.error){
+      fail(r.error);
+      return;
+    }
+
+    state.settings={
+      ...(state.settings||{}),
+      notifications:enabled
+    };
+
+    closeModal();
+
+    toast("Pengaturan notifikasi disimpan.");
+  };
+};
+
+
+async function loadAll(){
+
+  const uid=state.user.id;
+
+  const results=await Promise.all([
 
     db
       .from("transactions")
       .select("*")
-      .eq("user_id", uid)
-      .order("transaction_date", { ascending: false })
-      .order("created_at", { ascending: false }),
+      .eq("user_id",uid)
+      .order("transaction_date",{ascending:false})
+      .order("created_at",{ascending:false}),
 
     db
       .from("categories")
       .select("*")
-      .eq("user_id", uid)
+      .eq("user_id",uid)
       .order("name"),
 
     db
       .from("budgets")
       .select("*, categories(name,icon)")
-      .eq("user_id", uid)
-      .order("month", { ascending: false }),
+      .eq("user_id",uid)
+      .order("month",{ascending:false}),
 
     db
       .from("savings_goals")
       .select("*")
-      .eq("user_id", uid)
-      .order("created_at", { ascending: false }),
+      .eq("user_id",uid)
+      .order("created_at",{ascending:false}),
 
     db
       .from("recurring_transactions")
       .select("*, categories(name,icon)")
-      .eq("user_id", uid)
+      .eq("user_id",uid)
       .order("next_date"),
 
     db
       .from("app_settings")
       .select("*")
-      .eq("user_id", uid)
+      .eq("user_id",uid)
       .maybeSingle()
 
   ]);
 
-  const names = [
+  const names=[
     "transactions",
     "categories",
     "budgets",
@@ -462,108 +653,95 @@ async function loadAll() {
     "settings"
   ];
 
-  results.forEach((r, i) => {
-
-    if (r.error) throw r.error;
-
-    state[names[i]] = r.data || null;
+  results.forEach((r,i)=>{
+    if(r.error) throw r.error;
+    state[names[i]]=r.data||null;
   });
 
-  if (!state.settings) {
+  if(!state.settings){
 
     await saveSettings({
-      currency: "IDR",
-      theme: "dark",
-      notifications: true
+      currency:"IDR",
+      theme:"dark",
+      notifications:true
     });
 
-    state.settings = {
-      theme: "dark"
+    state.settings={
+      theme:"dark"
     };
   }
 
-  if (!state.categories.length) {
+  if(!state.categories.length)
     await seedCategories();
-  }
 
   applyTheme();
-
   renderAll();
 }
 
 
-async function seedCategories() {
+async function seedCategories(){
 
-  const base = [
-
-    ["🍔", "Makanan", "expense"],
-    ["🚌", "Transportasi", "expense"],
-    ["🎮", "Hiburan", "expense"],
-    ["📚", "Pendidikan", "expense"],
-    ["🛍️", "Belanja", "expense"],
-    ["💡", "Tagihan", "expense"],
-    ["🏠", "Rumah", "expense"],
-    ["📦", "Lainnya", "expense"],
-
-    ["💼", "Gaji", "income"],
-    ["💻", "Freelance", "income"],
-    ["🎁", "Bonus", "income"],
-    ["💰", "Lainnya", "income"]
-
+  const base=[
+    ["🍔","Makanan","expense"],
+    ["🚌","Transportasi","expense"],
+    ["🎮","Hiburan","expense"],
+    ["📚","Pendidikan","expense"],
+    ["🛍️","Belanja","expense"],
+    ["💡","Tagihan","expense"],
+    ["🏠","Rumah","expense"],
+    ["📦","Lainnya","expense"],
+    ["💼","Gaji","income"],
+    ["💻","Freelance","income"],
+    ["🎁","Bonus","income"],
+    ["💰","Lainnya","income"]
   ];
 
-  const { error } =
-    await db
-      .from("categories")
-      .insert(
-        base.map(([icon, name, type]) => ({
-          user_id: state.user.id,
+  const {error}=await db
+    .from("categories")
+    .insert(
+      base.map(
+        ([icon,name,type])=>({
+          user_id:state.user.id,
           icon,
           name,
           type
-        }))
-      );
+        })
+      )
+    );
 
-  if (error) throw error;
+  if(error) throw error;
 
-  const { data } =
-    await db
-      .from("categories")
-      .select("*")
-      .eq("user_id", state.user.id)
-      .order("name");
+  const {data}=await db
+    .from("categories")
+    .select("*")
+    .eq("user_id",state.user.id)
+    .order("name");
 
-  state.categories = data || [];
+  state.categories=data||[];
 }
 
 
-async function saveSettings(patch) {
+async function saveSettings(patch){
 
   await db
     .from("app_settings")
     .upsert({
-      user_id: state.user.id,
+      user_id:state.user.id,
       ...patch,
-      updated_at: new Date().toISOString()
+      updated_at:new Date().toISOString()
     });
 }
 
 
-function applyTheme() {
-
+function applyTheme(){
   document.body.classList.toggle(
     "light",
-    state.settings?.theme === "light"
+    state.settings?.theme==="light"
   );
 }
 
 
-/* =========================
-   RENDER ALL
-========================= */
-
-function renderAll() {
-
+function renderAll(){
   renderDashboard();
   renderFilters();
   renderTransactions();
@@ -573,65 +751,53 @@ function renderAll() {
 }
 
 
-function monthTx(m = monthISO()) {
-
+function monthTx(m=monthISO()){
   return state.transactions.filter(
-    t =>
-      String(t.transaction_date).startsWith(m)
+    t=>String(t.transaction_date).startsWith(m)
   );
 }
 
 
-/* =========================
-   DASHBOARD
-========================= */
+function renderDashboard(){
 
-function renderDashboard() {
+  const tx=monthTx();
 
-  const tx = monthTx();
+  const income=tx
+    .filter(t=>t.type==="income")
+    .reduce((a,t)=>a+Number(t.amount),0);
 
-  const income =
-    tx
-      .filter(t => t.type === "income")
-      .reduce((a, t) => a + Number(t.amount), 0);
+  const expense=tx
+    .filter(t=>t.type==="expense")
+    .reduce((a,t)=>a+Number(t.amount),0);
 
-  const expense =
-    tx
-      .filter(t => t.type === "expense")
-      .reduce((a, t) => a + Number(t.amount), 0);
+  const allIncome=state.transactions
+    .filter(t=>t.type==="income")
+    .reduce((a,t)=>a+Number(t.amount),0);
 
-  const allIncome =
-    state.transactions
-      .filter(t => t.type === "income")
-      .reduce((a, t) => a + Number(t.amount), 0);
+  const allExpense=state.transactions
+    .filter(t=>t.type==="expense")
+    .reduce((a,t)=>a+Number(t.amount),0);
 
-  const allExpense =
-    state.transactions
-      .filter(t => t.type === "expense")
-      .reduce((a, t) => a + Number(t.amount), 0);
+  $("balance").textContent=
+    money(allIncome-allExpense);
 
-  $("balance").textContent =
-    money(allIncome - allExpense);
-
-  $("incomeTotal").textContent =
+  $("incomeTotal").textContent=
     money(income);
 
-  $("expenseTotal").textContent =
+  $("expenseTotal").textContent=
     money(expense);
 
-  $("savingRate").textContent =
+  $("savingRate").textContent=
     income
-      ? Math.round(
-          ((income - expense) / income) * 100
-        ) + "%"
+      ? Math.round((income-expense)/income*100)+"%"
       : "0%";
 
-  $("txCount").textContent =
+  $("txCount").textContent=
     tx.length;
 
-  $("greeting").textContent =
-    "Halo, " +
-    (state.user.email?.split("@")[0] || "Finova") +
+  $("greeting").textContent=
+    "Halo, "+
+    (state.user.email?.split("@")[0]||"Finova")+
     " 👋";
 
   renderCashflowChart();
@@ -641,202 +807,174 @@ function renderDashboard() {
 }
 
 
-/* =========================
-   CHART
-========================= */
-
-function destroyChart(k) {
-
-  if (state.charts[k]) {
+function destroyChart(k){
+  if(state.charts[k])
     state.charts[k].destroy();
-  }
 }
 
 
-function renderCashflowChart() {
+function renderCashflowChart(){
 
   destroyChart("cash");
 
-  const labels = [];
-  const inc = [];
-  const exp = [];
+  const labels=[];
+  const inc=[];
+  const exp=[];
 
-  for (let i = 5; i >= 0; i--) {
+  for(let i=5;i>=0;i--){
 
-    const d = new Date();
+    const d=new Date();
 
-    d.setMonth(d.getMonth() - i);
+    d.setMonth(
+      d.getMonth()-i
+    );
 
-    const m =
-      d.toISOString().slice(0, 7);
+    const m=d
+      .toISOString()
+      .slice(0,7);
 
     labels.push(
       d.toLocaleDateString(
         "id-ID",
-        { month: "short" }
+        {month:"short"}
       )
     );
 
-    const tx = monthTx(m);
+    const tx=monthTx(m);
 
     inc.push(
       tx
-        .filter(t => t.type === "income")
+        .filter(t=>t.type==="income")
         .reduce(
-          (a, t) => a + Number(t.amount),
+          (a,t)=>a+Number(t.amount),
           0
         )
     );
 
     exp.push(
       tx
-        .filter(t => t.type === "expense")
+        .filter(t=>t.type==="expense")
         .reduce(
-          (a, t) => a + Number(t.amount),
+          (a,t)=>a+Number(t.amount),
           0
         )
     );
   }
 
-  state.charts.cash =
-    new Chart(
-      $("cashflowChart"),
-      {
-        type: "line",
+  state.charts.cash=new Chart(
+    $("cashflowChart"),
+    {
+      type:"line",
 
-        data: {
-          labels,
+      data:{
+        labels,
 
-          datasets: [
-            {
-              label: "Masuk",
-              data: inc,
-              tension: 0.35,
-              borderWidth: 2
-            },
-            {
-              label: "Keluar",
-              data: exp,
-              tension: 0.35,
-              borderWidth: 2
+        datasets:[
+          {
+            label:"Masuk",
+            data:inc,
+            tension:.35,
+            borderWidth:2
+          },
+          {
+            label:"Keluar",
+            data:exp,
+            tension:.35,
+            borderWidth:2
+          }
+        ]
+      },
+
+      options:{
+        animation:false,
+        responsive:true,
+        maintainAspectRatio:false,
+
+        plugins:{
+          legend:{
+            labels:{
+              color:getComputedStyle(document.body)
+                .getPropertyValue("--text")
             }
-          ]
+          }
         },
 
-        options: {
-
-          responsive: true,
-
-          maintainAspectRatio: true,
-
-          aspectRatio: 1.6,
-
-          animation: false,
-
-          plugins: {
-            legend: {
-              labels: {
-                color:
-                  getComputedStyle(document.body)
-                    .getPropertyValue("--text")
-              }
+        scales:{
+          y:{
+            ticks:{
+              callback:v=>money(v),
+              color:"#8e94a7"
+            },
+            grid:{
+              color:"#242837"
             }
           },
 
-          scales: {
-
-            y: {
-              ticks: {
-                callback: v => money(v),
-                color: "#8e94a7"
-              },
-
-              grid: {
-                color: "#242837"
-              }
+          x:{
+            ticks:{
+              color:"#8e94a7"
             },
-
-            x: {
-              ticks: {
-                color: "#8e94a7"
-              },
-
-              grid: {
-                display: false
-              }
+            grid:{
+              display:false
             }
           }
         }
       }
-    );
+    }
+  );
 }
 
 
-/* =========================
-   BUDGET PREVIEW
-========================= */
+function renderBudgetPreview(){
 
-function renderBudgetPreview() {
+  const m=monthISO();
 
-  const m = monthISO();
+  const bud=state.budgets.filter(
+    b=>String(b.month).startsWith(m)
+  );
 
-  const bud =
-    state.budgets.filter(
-      b => String(b.month).startsWith(m)
-    );
-
-  $("budgetPreview").innerHTML =
+  $("budgetPreview").innerHTML=
     bud.length
-      ? bud
-          .slice(0, 4)
-          .map(b => budgetHTML(b))
+      ? bud.slice(0,4)
+          .map(b=>budgetHTML(b))
           .join("")
       : `<div class="muted">
-           Belum ada anggaran bulan ini.
-         </div>`;
+          Belum ada anggaran bulan ini.
+        </div>`;
 }
 
 
-/*
-  CATATAN:
-  transactions TIDAK mempunyai category_id.
-  Jadi budget dicocokkan menggunakan nama kategori.
-*/
-
-function spentForBudget(b) {
-
-  const budgetCategory =
-    b.categories?.name;
+function spentForBudget(b){
 
   return monthTx(
-    String(b.month).slice(0, 7)
+    String(b.month).slice(0,7)
   )
-    .filter(
-      t =>
-        t.type === "expense" &&
-        t.category === budgetCategory
-    )
-    .reduce(
-      (a, t) => a + Number(t.amount),
-      0
-    );
+  .filter(
+    t=>
+      t.type==="expense" &&
+      (
+        b.category_id
+          ? t.category_id===b.category_id
+          : t.category===b.categories?.name
+      )
+  )
+  .reduce(
+    (a,t)=>a+Number(t.amount),
+    0
+  );
 }
 
 
-function budgetHTML(b) {
+function budgetHTML(b){
 
-  const spent =
-    spentForBudget(b);
+  const spent=spentForBudget(b);
 
-  const pct =
-    Number(b.amount) > 0
-      ? Math.min(
-          100,
-          Math.round(
-            (spent / Number(b.amount)) * 100
-          )
-        )
-      : 0;
+  const pct=Math.min(
+    100,
+    Math.round(
+      spent/Number(b.amount)*100
+    )
+  );
 
   return `
     <div class="budget-item">
@@ -844,8 +982,8 @@ function budgetHTML(b) {
       <div class="budget-top">
 
         <b>
-          ${esc(b.categories?.icon || "📦")}
-          ${esc(b.categories?.name || "Kategori")}
+          ${esc(b.categories?.icon||"📦")}
+          ${esc(b.categories?.name||"Kategori")}
         </b>
 
         <span>
@@ -860,7 +998,7 @@ function budgetHTML(b) {
         <i style="width:${pct}%"></i>
       </div>
 
-      <small class="${pct >= 90 ? "expense" : ""}">
+      <small class="${pct>=90?"expense":""}">
         ${pct}% terpakai
       </small>
 
@@ -869,18 +1007,16 @@ function budgetHTML(b) {
 }
 
 
-function renderBudgetList() {
+function renderBudgetList(){
 
-  const html =
+  $("budgetList").innerHTML=
     state.budgets
       .filter(
-        b =>
-          String(b.month)
-            .startsWith(monthISO())
+        b=>String(b.month).startsWith(monthISO())
       )
       .map(
-        b =>
-          budgetHTML(b) +
+        b=>
+          budgetHTML(b)+
           `
           <div>
             <button
@@ -897,52 +1033,42 @@ function renderBudgetList() {
           </div>
           `
       )
-      .join("");
-
-  $("budgetList").innerHTML =
-    html ||
-    `<div class="muted">
-      Belum ada anggaran.
-    </div>`;
+      .join("")
+      ||
+      `<div class="muted">
+        Belum ada anggaran.
+      </div>`;
 }
 
 
-function renderBudgets() {
-
+function renderBudgets(){
   renderBudgetList();
 }
 
 
-/* =========================
-   GOALS
-========================= */
+function renderGoalPreview(){
 
-function renderGoalPreview() {
-
-  $("goalPreview").innerHTML =
+  $("goalPreview").innerHTML=
     state.goals
-      .slice(0, 3)
+      .slice(0,3)
       .map(goalHTML)
-      .join("") ||
-    `<div class="muted">
-      Belum ada target tabungan.
-    </div>`;
+      .join("")
+      ||
+      `<div class="muted">
+        Belum ada target tabungan.
+      </div>`;
 }
 
 
-function goalHTML(g) {
+function goalHTML(g){
 
-  const pct =
-    Number(g.target_amount) > 0
-      ? Math.min(
-          100,
-          Math.round(
-            (Number(g.current_amount) /
-              Number(g.target_amount)) *
-              100
-          )
-        )
-      : 0;
+  const pct=Math.min(
+    100,
+    Math.round(
+      Number(g.current_amount)/
+      Number(g.target_amount)*100
+    )
+  );
 
   return `
     <div class="goal-card">
@@ -974,10 +1100,10 @@ function goalHTML(g) {
       ${
         g.deadline
           ? `<small class="muted">
-               Target
-               ${new Date(g.deadline)
-                 .toLocaleDateString("id-ID")}
-             </small>`
+              Target
+              ${new Date(g.deadline)
+                .toLocaleDateString("id-ID")}
+            </small>`
           : ""
       }
 
@@ -986,13 +1112,13 @@ function goalHTML(g) {
 }
 
 
-function renderGoals() {
+function renderGoals(){
 
-  $("goalList").innerHTML =
+  $("goalList").innerHTML=
     state.goals
       .map(
-        g =>
-          goalHTML(g) +
+        g=>
+          goalHTML(g)+
           `
           <div>
 
@@ -1011,27 +1137,24 @@ function renderGoals() {
           </div>
           `
       )
-      .join("") ||
-    `<div class="muted">
-      Belum ada target.
-    </div>`;
+      .join("")
+      ||
+      `<div class="muted">
+        Belum ada target.
+      </div>`;
 }
 
 
-/* =========================
-   FILTER
-========================= */
+function renderFilters(){
 
-function renderFilters() {
-
-  $("filterCategory").innerHTML =
+  $("filterCategory").innerHTML=
     `<option value="">
       Semua kategori
-    </option>` +
-
+    </option>`+
     state.categories
+      .filter(c=>c.type==="expense")
       .map(
-        c =>
+        c=>
           `<option value="${c.id}">
             ${esc(c.icon)}
             ${esc(c.name)}
@@ -1041,77 +1164,60 @@ function renderFilters() {
 }
 
 
-function renderTransactions() {
+function renderTransactions(){
 
-  const q =
-    $("searchTx").value.toLowerCase();
+  const q=
+    $("searchTx")
+      .value
+      .toLowerCase();
 
-  const type =
+  const type=
     $("filterType").value;
 
-  const cat =
+  const cat=
     $("filterCategory").value;
 
-  const m =
+  const m=
     $("filterMonth").value;
 
-  const selectedCategory =
+  const selectedCategory=
     state.categories.find(
-      c => c.id === cat
+      c=>c.id===cat
     );
 
-  const selectedCategoryName =
-    selectedCategory?.name || "";
+  const selectedCategoryName=
+    selectedCategory?.name||"";
 
-  const tx =
+  let tx=
     state.transactions.filter(
-      t =>
-
+      t=>
         (
           !q ||
-          `${t.name}
-            ${t.note || ""}
-            ${t.category || ""}`
+          `${t.name} ${t.note||""} ${t.category||""}`
             .toLowerCase()
             .includes(q)
-        )
-
-        &&
-
-        (!type || t.type === type)
-
-        &&
-
-        (
-          !cat ||
-          t.category === selectedCategoryName
-        )
-
-        &&
-
-        (
-          !m ||
-          String(t.transaction_date)
-            .startsWith(m)
-        )
+        )&&
+        (!type||t.type===type)&&
+        (!cat||t.category===selectedCategoryName)&&
+        (!m||String(t.transaction_date).startsWith(m))
     );
 
-  $("transactionList").innerHTML =
+  $("transactionList").innerHTML=
     tx
-      .map(t => {
+      .map(t=>{
 
-        const c =
+        const c=
           state.categories.find(
-            x =>
-              x.name === t.category &&
-              x.type === t.type
+            x=>
+              x.name===t.category &&
+              x.type===t.type
           );
 
         return `
           <div class="tx-item">
 
             <div class="tx-icon">
-              ${esc(c?.icon || "📦")}
+              ${esc(c?.icon||"📦")}
             </div>
 
             <div>
@@ -1121,15 +1227,10 @@ function renderTransactions() {
               </div>
 
               <div class="tx-meta">
-                ${esc(
-                  c?.name ||
-                  t.category ||
-                  "Tanpa kategori"
-                )}
+                ${esc(c?.name||t.category||"Tanpa kategori")}
                 ·
-                ${new Date(
-                  t.transaction_date
-                ).toLocaleDateString("id-ID")}
+                ${new Date(t.transaction_date)
+                  .toLocaleDateString("id-ID")}
               </div>
 
             </div>
@@ -1137,7 +1238,7 @@ function renderTransactions() {
             <div style="text-align:right">
 
               <b class="${t.type}">
-                ${t.type === "income" ? "+" : "-"}
+                ${t.type==="income"?"+":"-"}
                 ${money(t.amount)}
               </b>
 
@@ -1162,66 +1263,61 @@ function renderTransactions() {
           </div>
         `;
       })
-      .join("") ||
-
-    `<div class="muted">
-      Tidak ada transaksi.
-    </div>`;
+      .join("")
+      ||
+      `<div class="muted">
+        Tidak ada transaksi.
+      </div>`;
 }
 
 
-["searchTx", "filterType", "filterCategory", "filterMonth"]
-  .forEach(id =>
-    $(id).addEventListener(
-      "input",
-      renderTransactions
-    )
-  );
+[
+  "searchTx",
+  "filterType",
+  "filterCategory",
+  "filterMonth"
+].forEach(
+  id=>$(id).addEventListener(
+    "input",
+    renderTransactions
+  )
+);
 
 
-/* =========================
-   MODAL
-========================= */
+function openModal(title,html){
 
-function openModal(title, html) {
+  $("modalTitle").textContent=title;
 
-  $("modalTitle").textContent = title;
-
-  $("modalBody").innerHTML = html;
+  $("modalBody").innerHTML=html;
 
   $("modal").classList.remove("hidden");
 }
 
 
-function closeModal() {
+function closeModal(){
 
   $("modal").classList.add("hidden");
 }
 
-
-$("closeModal").onclick = closeModal;
+$("closeModal").onclick=closeModal;
 
 document
   .querySelector(".modal-backdrop")
-  .onclick = closeModal;
+  .onclick=closeModal;
 
-
-/* =========================
-   CATEGORY OPTIONS
-========================= */
 
 function categoryOptions(
   type,
-  selected = ""
-) {
+  selected=""
+){
 
   return state.categories
-    .filter(c => c.type === type)
+    .filter(c=>c.type===type)
     .map(
-      c =>
+      c=>
         `<option
           value="${c.id}"
-          ${c.id === selected ? "selected" : ""}>
+          ${c.id===selected?"selected":""}>
           ${esc(c.icon)}
           ${esc(c.name)}
         </option>`
@@ -1230,21 +1326,17 @@ function categoryOptions(
 }
 
 
-/* =========================
-   TRANSACTION FORM
-========================= */
+function txForm(t={}){
 
-function txForm(t = {}) {
+  const type=
+    t.type||"expense";
 
-  const type =
-    t.type || "expense";
-
-  const selectedId =
+  const selectedId=
     state.categories.find(
-      c =>
-        c.name === t.category &&
-        c.type === type
-    )?.id || "";
+      c=>
+        c.name===t.category &&
+        c.type===type
+    )?.id||"";
 
   return `
     <form id="txForm">
@@ -1259,13 +1351,13 @@ function txForm(t = {}) {
 
             <option
               value="expense"
-              ${type === "expense" ? "selected" : ""}>
+              ${type==="expense"?"selected":""}>
               Pengeluaran
             </option>
 
             <option
               value="income"
-              ${type === "income" ? "selected" : ""}>
+              ${type==="income"?"selected":""}>
               Pemasukan
             </option>
 
@@ -1281,7 +1373,7 @@ function txForm(t = {}) {
             id="fAmount"
             type="number"
             min="1"
-            value="${t.amount || ""}"
+            value="${t.amount||""}"
             required>
 
         </div>
@@ -1292,7 +1384,7 @@ function txForm(t = {}) {
 
           <input
             id="fName"
-            value="${esc(t.name || "")}"
+            value="${esc(t.name||"")}"
             placeholder="Contoh: Makan siang"
             required>
 
@@ -1303,7 +1395,7 @@ function txForm(t = {}) {
           <label>Kategori</label>
 
           <select id="fCategory">
-            ${categoryOptions(type, selectedId)}
+            ${categoryOptions(type,selectedId)}
           </select>
 
         </div>
@@ -1315,19 +1407,8 @@ function txForm(t = {}) {
           <input
             id="fDate"
             type="date"
-            value="${t.transaction_date || todayISO()}"
+            value="${t.transaction_date||todayISO()}"
             required>
-
-        </div>
-
-        <div class="full-col">
-
-          <label>Catatan</label>
-
-          <input
-            id="fNote"
-            value="${esc(t.note || "")}"
-            placeholder="Opsional">
 
         </div>
 
@@ -1355,7 +1436,7 @@ function txForm(t = {}) {
 }
 
 
-function openTx(t) {
+function openTx(t){
 
   openModal(
     t
@@ -1364,84 +1445,60 @@ function openTx(t) {
     txForm(t)
   );
 
-  $("fType").onchange = () => {
+  $("fType").onchange=()=>{
 
-    $("fCategory").innerHTML =
+    $("fCategory").innerHTML=
       categoryOptions(
         $("fType").value
       );
   };
 
-  $("cancelForm").onclick =
+  $("cancelForm").onclick=
     closeModal;
 
-  $("txForm").onsubmit =
-    async e => {
+  $("txForm").onsubmit=
+    async e=>{
 
       e.preventDefault();
 
-      const type =
+      const type=
         $("fType").value;
 
-      const cid =
+      const cid=
         $("fCategory").value;
 
-      const c =
+      const c=
         state.categories.find(
-          x => x.id === cid
+          x=>x.id===cid
         );
 
-      /*
-        PENTING:
-        transactions milik database kamu
-        TIDAK punya category_id,
-        jadi kita simpan category
-        sebagai TEXT.
-      */
-
-      const payload = {
-
-        name:
-          $("fName").value.trim(),
-
-        amount:
-          Number($("fAmount").value),
-
+      const payload={
+        name:$("fName").value.trim(),
+        amount:Number($("fAmount").value),
         type,
-
-        category:
-          c?.name || null,
-
-        transaction_date:
-          $("fDate").value
-
+        category:c?.name||null,
+        transaction_date:$("fDate").value
       };
 
-      try {
+      try{
 
-        let r;
+        let r=
+          t
+            ? await db
+                .from("transactions")
+                .update(payload)
+                .eq("id",t.id)
+                .eq("user_id",state.user.id)
 
-        if (t) {
+            : await db
+                .from("transactions")
+                .insert({
+                  ...payload,
+                  user_id:state.user.id
+                });
 
-          r =
-            await db
-              .from("transactions")
-              .update(payload)
-              .eq("id", t.id)
-              .eq("user_id", state.user.id);
-
-        } else {
-
-          r =
-            await db
-              .from("transactions")
-              .insert({
-                ...payload,
-                user_id: state.user.id
-              });
-        }
-
-        if (r.error) throw r.error;
+        if(r.error)
+          throw r.error;
 
         closeModal();
 
@@ -1449,7 +1506,7 @@ function openTx(t) {
 
         toast("Transaksi tersimpan.");
 
-      } catch (err) {
+      }catch(err){
 
         fail(err);
       }
@@ -1457,71 +1514,66 @@ function openTx(t) {
 }
 
 
-$("addTxBtn").onclick =
-  () => openTx();
+$("addTxBtn").onclick=
+  ()=>openTx();
 
-$("quickAdd").onclick =
-  () => openTx();
+$("quickAdd").onclick=
+  ()=>openTx();
 
 
-async function refreshTransactions() {
+async function refreshTransactions(){
 
-  const r =
+  const r=
     await db
       .from("transactions")
       .select("*")
-      .eq("user_id", state.user.id)
+      .eq("user_id",state.user.id)
       .order(
         "transaction_date",
-        { ascending: false }
+        {ascending:false}
       )
       .order(
         "created_at",
-        { ascending: false }
+        {ascending:false}
       );
 
-  if (r.error) throw r.error;
+  if(r.error)
+    throw r.error;
 
-  state.transactions =
-    r.data || [];
+  state.transactions=
+    r.data||[];
 
   renderAll();
 }
 
 
-window.editTransaction =
-  id =>
+window.editTransaction=
+  id=>
     openTx(
       state.transactions.find(
-        t => t.id === id
+        t=>t.id===id
       )
     );
 
 
-window.deleteTransaction =
-  async id => {
+window.deleteTransaction=
+  async id=>{
 
-    if (
-      !confirm(
-        "Hapus transaksi ini?"
-      )
-    ) return;
+    if(!confirm("Hapus transaksi ini?"))
+      return;
 
-    const r =
+    const r=
       await db
         .from("transactions")
         .delete()
-        .eq("id", id)
-        .eq(
-          "user_id",
-          state.user.id
-        );
+        .eq("id",id)
+        .eq("user_id",state.user.id);
 
-    if (r.error) {
+    if(r.error){
 
       fail(r.error);
 
-    } else {
+    }else{
 
       await refreshTransactions();
 
@@ -1530,15 +1582,12 @@ window.deleteTransaction =
   };
 
 
-/* =========================
-   BUDGET
-========================= */
+function budgetForm(b={}){
 
-function budgetForm(b = {}) {
-
-  const m = b.month
-    ? String(b.month).slice(0, 7)
-    : monthISO();
+  const m=
+    b.month
+      ? String(b.month).slice(0,7)
+      : monthISO();
 
   return `
     <form id="budgetForm">
@@ -1546,7 +1595,10 @@ function budgetForm(b = {}) {
       <label>Kategori</label>
 
       <select id="bCat">
-        ${categoryOptions("expense", b.category_id)}
+        ${categoryOptions(
+          "expense",
+          b.category_id
+        )}
       </select>
 
       <label>Anggaran</label>
@@ -1555,7 +1607,7 @@ function budgetForm(b = {}) {
         id="bAmount"
         type="number"
         min="1"
-        value="${b.amount || ""}"
+        value="${b.amount||""}"
         required>
 
       <label>Bulan</label>
@@ -1568,9 +1620,7 @@ function budgetForm(b = {}) {
 
       <div class="form-actions">
 
-        <button
-          class="primary"
-          type="submit">
+        <button class="primary">
           Simpan
         </button>
 
@@ -1588,7 +1638,7 @@ function budgetForm(b = {}) {
 }
 
 
-function openBudget(b) {
+function openBudget(b){
 
   openModal(
     b
@@ -1597,133 +1647,106 @@ function openBudget(b) {
     budgetForm(b)
   );
 
-  $("cancelBudget").onclick =
+  $("cancelBudget").onclick=
     closeModal;
 
-  $("budgetForm").onsubmit =
-    async e => {
+  $("budgetForm").onsubmit=
+    async e=>{
 
       e.preventDefault();
 
-      const payload = {
-
-        user_id:
-          state.user.id,
-
-        category_id:
-          $("bCat").value,
-
-        amount:
-          Number($("bAmount").value),
-
-        month:
-          $("bMonth").value + "-01"
+      const payload={
+        user_id:state.user.id,
+        category_id:$("bCat").value,
+        amount:Number(
+          $("bAmount").value
+        ),
+        month:$("bMonth").value+"-01"
       };
 
-      try {
-
-        const r = b
-
+      const r=
+        b
           ? await db
               .from("budgets")
               .update(payload)
-              .eq("id", b.id)
-              .eq(
-                "user_id",
-                state.user.id
-              )
+              .eq("id",b.id)
+              .eq("user_id",state.user.id)
 
           : await db
               .from("budgets")
               .insert(payload);
 
-        if (r.error) throw r.error;
+      if(r.error){
+
+        fail(r.error);
+
+      }else{
 
         closeModal();
 
         await refreshBudgets();
 
         toast("Anggaran tersimpan.");
-
-      } catch (err) {
-
-        fail(err);
       }
     };
 }
 
 
-$("addBudgetBtn").onclick =
-  () => openBudget();
+$("addBudgetBtn").onclick=
+  ()=>openBudget();
 
-
-window.editBudget =
-  id =>
+window.editBudget=
+  id=>
     openBudget(
       state.budgets.find(
-        x => x.id === id
+        x=>x.id===id
       )
     );
 
 
-window.deleteBudget =
-  async id => {
+window.deleteBudget=
+  async id=>{
 
-    if (!confirm("Hapus anggaran?"))
+    if(!confirm("Hapus anggaran?"))
       return;
 
-    const r =
+    const r=
       await db
         .from("budgets")
         .delete()
-        .eq("id", id)
-        .eq(
-          "user_id",
-          state.user.id
-        );
+        .eq("id",id)
+        .eq("user_id",state.user.id);
 
-    if (r.error) {
-
+    if(r.error)
       fail(r.error);
-
-    } else {
-
+    else
       await refreshBudgets();
-
-      toast("Anggaran dihapus.");
-    }
   };
 
 
-async function refreshBudgets() {
+async function refreshBudgets(){
 
-  const r =
+  const r=
     await db
       .from("budgets")
       .select("*, categories(name,icon)")
-      .eq(
-        "user_id",
-        state.user.id
-      )
+      .eq("user_id",state.user.id)
       .order(
         "month",
-        { ascending: false }
+        {ascending:false}
       );
 
-  if (r.error) throw r.error;
+  if(r.error)
+    throw r.error;
 
-  state.budgets =
-    r.data || [];
+  state.budgets=
+    r.data||[];
 
   renderAll();
 }
 
 
-/* =========================
-   TARGET TABUNGAN
-========================= */
-
-function goalForm(g = {}) {
+function goalForm(g={}){
 
   return `
     <form id="goalForm">
@@ -1736,9 +1759,7 @@ function goalForm(g = {}) {
 
           <input
             id="gIcon"
-            value="${esc(
-              g.icon || "🎯"
-            )}">
+            value="${esc(g.icon||"🎯")}">
 
         </div>
 
@@ -1748,9 +1769,7 @@ function goalForm(g = {}) {
 
           <input
             id="gName"
-            value="${esc(
-              g.name || ""
-            )}"
+            value="${esc(g.name||"")}"
             required>
 
         </div>
@@ -1763,7 +1782,7 @@ function goalForm(g = {}) {
             id="gTarget"
             type="number"
             min="1"
-            value="${g.target_amount || ""}"
+            value="${g.target_amount||""}"
             required>
 
         </div>
@@ -1776,7 +1795,7 @@ function goalForm(g = {}) {
             id="gCurrent"
             type="number"
             min="0"
-            value="${g.current_amount || 0}">
+            value="${g.current_amount||0}">
 
         </div>
 
@@ -1787,7 +1806,7 @@ function goalForm(g = {}) {
           <input
             id="gDeadline"
             type="date"
-            value="${g.deadline || ""}">
+            value="${g.deadline||""}">
 
         </div>
 
@@ -1795,9 +1814,7 @@ function goalForm(g = {}) {
 
       <div class="form-actions">
 
-        <button
-          class="primary"
-          type="submit">
+        <button class="primary">
           Simpan
         </button>
 
@@ -1815,7 +1832,7 @@ function goalForm(g = {}) {
 }
 
 
-function openGoal(g) {
+function openGoal(g){
 
   openModal(
     g
@@ -1824,1712 +1841,441 @@ function openGoal(g) {
     goalForm(g)
   );
 
-  $("cancelGoal").onclick =
+  $("cancelGoal").onclick=
     closeModal;
 
-  $("goalForm").onsubmit =
-    async e => {
+  $("goalForm").onsubmit=
+    async e=>{
 
       e.preventDefault();
 
-      const payload = {
-
-        user_id:
-          state.user.id,
-
-        name:
-          $("gName").value.trim(),
-
-        icon:
-          $("gIcon").value || "🎯",
-
-        target_amount:
-          Number(
-            $("gTarget").value
-          ),
-
-        current_amount:
-          Number(
-            $("gCurrent").value || 0
-          ),
-
+      const p={
+        user_id:state.user.id,
+        name:$("gName").value.trim(),
+        icon:$("gIcon").value||"🎯",
+        target_amount:Number(
+          $("gTarget").value
+        ),
+        current_amount:Number(
+          $("gCurrent").value||0
+        ),
         deadline:
-          $("gDeadline").value || null,
-
+          $("gDeadline").value||null,
         updated_at:
           new Date().toISOString()
       };
 
-      try {
-
-        const r = g
-
+      const r=
+        g
           ? await db
               .from("savings_goals")
-              .update(payload)
-              .eq("id", g.id)
-              .eq(
-                "user_id",
-                state.user.id
-              )
+              .update(p)
+              .eq("id",g.id)
+              .eq("user_id",state.user.id)
 
           : await db
               .from("savings_goals")
-              .insert(payload);
+              .insert(p);
 
-        if (r.error) throw r.error;
+      if(r.error){
+
+        fail(r.error);
+
+      }else{
 
         closeModal();
 
         await refreshGoals();
 
         toast("Target tersimpan.");
-
-      } catch (err) {
-
-        fail(err);
       }
     };
 }
 
 
-$("addGoalBtn").onclick =
-  () => openGoal();
+$("addGoalBtn").onclick=
+  ()=>openGoal();
 
-
-window.editGoal =
-  id =>
+window.editGoal=
+  id=>
     openGoal(
       state.goals.find(
-        x => x.id === id
+        x=>x.id===id
       )
     );
 
 
-window.deleteGoal =
-  async id => {
+window.deleteGoal=
+  async id=>{
 
-    if (!confirm("Hapus target?"))
+    if(!confirm("Hapus target?"))
       return;
 
-    const r =
+    const r=
       await db
         .from("savings_goals")
         .delete()
-        .eq("id", id)
-        .eq(
-          "user_id",
-          state.user.id
-        );
+        .eq("id",id)
+        .eq("user_id",state.user.id);
 
-    if (r.error) {
-
+    if(r.error)
       fail(r.error);
-
-    } else {
-
+    else
       await refreshGoals();
-
-      toast("Target dihapus.");
-    }
   };
 
 
-async function refreshGoals() {
+async function refreshGoals(){
 
-  const r =
+  const r=
     await db
       .from("savings_goals")
       .select("*")
-      .eq(
-        "user_id",
-        state.user.id
-      )
+      .eq("user_id",state.user.id)
       .order(
         "created_at",
-        { ascending: false }
+        {ascending:false}
       );
 
-  if (r.error) throw r.error;
+  if(r.error)
+    throw r.error;
 
-  state.goals =
-    r.data || [];
+  state.goals=
+    r.data||[];
 
   renderAll();
 }
 
 
-/* =========================
-   FINANCIAL HEALTH
-========================= */
+function renderHealth(){
 
-function renderHealth() {
-
-  const tx = monthTx();
-
-  const income =
-    tx
-      .filter(
-        t => t.type === "income"
-      )
+  const income=
+    monthTx()
+      .filter(t=>t.type==="income")
       .reduce(
-        (a, t) =>
-          a + Number(t.amount),
+        (a,t)=>a+Number(t.amount),
         0
       );
 
-  const expense =
-    tx
-      .filter(
-        t => t.type === "expense"
-      )
+  const expense=
+    monthTx()
+      .filter(t=>t.type==="expense")
       .reduce(
-        (a, t) =>
-          a + Number(t.amount),
+        (a,t)=>a+Number(t.amount),
         0
       );
 
-  const saving =
-    income > 0
+  const saving=
+    income
       ? Math.max(
           0,
-          (income - expense) / income
+          (income-expense)/income
         )
       : 0;
 
-  const budgets =
+  const bud=
     state.budgets.filter(
-      b =>
-        String(b.month)
-          .startsWith(monthISO())
+      b=>String(b.month)
+        .startsWith(monthISO())
     );
 
-  let budgetScore = 1;
-
-  if (budgets.length) {
-
-    const totalRatio =
-      budgets.reduce(
-        (sum, b) => {
-
-          const amount =
-            Number(b.amount) || 1;
-
-          const spent =
-            spentForBudget(b);
-
-          return (
-            sum +
+  const avgBudget=
+    bud.length
+      ? bud.reduce(
+          (a,b)=>
+            a+
             Math.min(
               1,
-              spent / amount
-            )
-          );
+              spentForBudget(b)/
+              Number(b.amount)
+            ),
+          0
+        )/bud.length
+      : 0;
 
-        },
-        0
-      );
-
-    budgetScore =
-      1 -
-      totalRatio / budgets.length;
-  }
-
-  let goalScore = 0;
-
-  if (state.goals.length) {
-
-    goalScore =
-      state.goals.reduce(
-        (sum, g) => {
-
-          const target =
-            Number(
-              g.target_amount
-            ) || 1;
-
-          const current =
-            Number(
-              g.current_amount
-            ) || 0;
-
-          return (
-            sum +
+  const goals=
+    state.goals.length
+      ? state.goals.reduce(
+          (a,g)=>
+            a+
             Math.min(
               1,
-              current / target
-            )
-          );
+              Number(g.current_amount)/
+              Number(g.target_amount)
+            ),
+          0
+        )/state.goals.length
+      : 0;
 
-        },
-        0
-      ) / state.goals.length;
-  }
-
-  let score =
-    saving * 45 +
-    budgetScore * 30 +
-    goalScore * 15 +
-    (state.transactions.length
-      ? 10
-      : 0);
-
-  score =
-    Math.max(
-      0,
-      Math.min(
-        100,
-        Math.round(score)
-      )
+  const score=
+    Math.round(
+      saving*45+
+      (1-avgBudget)*30+
+      goals*15+
+      (state.transactions.length?10:0)
     );
 
-  const badge =
-    $("healthBadge");
+  $("healthBadge").textContent=
+    `Health ${score}/100`;
 
-  if (badge) {
-    badge.textContent =
-      `Health ${score}/100`;
-  }
+  $("healthMeter").style.width=
+    Math.min(100,score)+"%";
 
-  if ($("healthMeter")) {
+  $("healthText").textContent=
+    score+"/100";
 
-    $("healthMeter").style.width =
-      score + "%";
-  }
-
-  if ($("healthText")) {
-
-    $("healthText").textContent =
-      score + "/100";
-  }
-
-  if ($("healthExplanation")) {
-
-    $("healthExplanation").textContent =
-      score >= 75
-        ? "Keuanganmu terlihat cukup terkontrol."
-        : score >= 50
+  $("healthExplanation").textContent=
+    score>=75
+      ? "Keuanganmu terlihat cukup terkontrol."
+      : score>=50
         ? "Ada beberapa area yang bisa diperbaiki bulan ini."
         : "Coba fokus pada cash flow, anggaran, dan target tabungan.";
-  }
 }
 
 
-/* =========================
-   REPORT / STATISTICS
-========================= */
+function renderReports(){
 
-function renderReports() {
+  const m=
+    $("reportMonth").value||
+    state.reportMonth;
 
-  const input =
-    $("reportMonth");
+  state.reportMonth=m;
 
-  const m =
-    input?.value ||
-    state.reportMonth ||
-    monthISO();
+  const tx=monthTx(m);
 
-  state.reportMonth = m;
-
-  const tx =
-    monthTx(m);
-
-  const income =
+  const inc=
     tx
-      .filter(
-        t => t.type === "income"
-      )
+      .filter(t=>t.type==="income")
       .reduce(
-        (a, t) =>
-          a + Number(t.amount),
+        (a,t)=>a+Number(t.amount),
         0
       );
 
-  const expense =
+  const exp=
     tx
-      .filter(
-        t => t.type === "expense"
-      )
+      .filter(t=>t.type==="expense")
       .reduce(
-        (a, t) =>
-          a + Number(t.amount),
+        (a,t)=>a+Number(t.amount),
         0
       );
 
-  if ($("reportSummary")) {
-
-    $("reportSummary").innerHTML = [
-
-      [
-        "Pemasukan",
-        money(income)
-      ],
-
-      [
-        "Pengeluaran",
-        money(expense)
-      ],
-
-      [
-        "Net Cash Flow",
-        money(
-          income - expense
-        )
-      ],
-
+  $("reportSummary").innerHTML=
+    [
+      ["Pemasukan",money(inc)],
+      ["Pengeluaran",money(exp)],
+      ["Net Cash Flow",money(inc-exp)],
       [
         "Saving Rate",
-        income
+        inc
           ? Math.round(
-              ((income - expense) /
-                income) *
-                100
-            ) + "%"
+              (inc-exp)/inc*100
+            )+"%"
           : "0%"
       ]
-
     ]
-      .map(
-        x =>
-          `
-          <div class="stat glass">
+    .map(
+      x=>
+        `<div class="stat glass">
+          <span>${x[0]}</span>
+          <strong>${x[1]}</strong>
+        </div>`
+    )
+    .join("");
 
-            <span>
-              ${x[0]}
-            </span>
-
-            <strong>
-              ${x[1]}
-            </strong>
-
-          </div>
-          `
-      )
-      .join("");
-  }
-
-
-  /* =========================
-     DONUT KATEGORI
-     ========================= */
-
-  const cats = {};
+  const cats={};
 
   tx
-    .filter(
-      t => t.type === "expense"
-    )
-    .forEach(t => {
-
-      const name =
-        t.category ||
-        "Lainnya";
-
-      cats[name] =
-        (cats[name] || 0) +
+    .filter(t=>t.type==="expense")
+    .forEach(t=>{
+      cats[t.category||"Lainnya"]=
+        (cats[t.category||"Lainnya"]||0)+
         Number(t.amount);
     });
 
+  destroyChart("cat");
 
-  if ($("categoryChart")) {
+  state.charts.cat=new Chart($("categoryChart"),{
+  type:"doughnut",
 
-    destroyChart("cat");
+  data:{
+    labels:Object.keys(cats),
+    datasets:[
+      {
+        data:Object.values(cats)
+      }
+    ]
+  },
 
-    state.charts.cat =
-      new Chart(
-        $("categoryChart"),
-        {
-          type: "doughnut",
+  options:{
+    responsive:true,
+    maintainAspectRatio:true,
 
-          data: {
+    animation:false,
 
-            labels:
-              Object.keys(cats),
+    aspectRatio:1.6,
 
-            datasets: [
-              {
-                data:
-                  Object.values(cats)
-              }
-            ]
-          },
-
-          options: {
-
-            responsive: true,
-
-            maintainAspectRatio: true,
-
-            aspectRatio: 1.6,
-
-            animation: false,
-
-            plugins: {
-
-              legend: {
-
-                labels: {
-
-                  color:
-                    getComputedStyle(
-                      document.body
-                    )
-                    .getPropertyValue(
-                      "--text"
-                    )
-                }
-              }
-            }
-          }
+    plugins:{
+      legend:{
+        labels:{
+          color:getComputedStyle(document.body)
+            .getPropertyValue("--text")
         }
-      );
+      }
+    }
   }
+});
 
 
-  /* =========================
-     TREND 6 BULAN
-     ========================= */
+  const labels=[];
+  const data=[];
 
-  const labels = [];
-  const data = [];
+  for(let i=5;i>=0;i--){
 
-  for (
-    let i = 5;
-    i >= 0;
-    i--
-  ) {
-
-    const d =
-      new Date(
-        m + "-01"
-      );
+    const d=
+      new Date(m+"-01");
 
     d.setMonth(
-      d.getMonth() - i
+      d.getMonth()-i
     );
 
-    const mm =
+    const mm=
       d.toISOString()
-        .slice(0, 7);
+        .slice(0,7);
 
     labels.push(
       d.toLocaleDateString(
         "id-ID",
-        {
-          month: "short"
-        }
+        {month:"short"}
       )
     );
 
-    const monthData =
+    const mt=
       monthTx(mm);
 
     data.push(
-      monthData
-        .filter(
-          t =>
-            t.type === "expense"
-        )
+      mt
+        .filter(t=>t.type==="expense")
         .reduce(
-          (a, t) =>
-            a + Number(t.amount),
+          (a,t)=>a+Number(t.amount),
           0
         )
     );
   }
 
+  destroyChart("trend");
 
-  if ($("trendChart")) {
+  state.charts.trend=
+    new Chart(
+      $("trendChart"),
+      {
+        type:"bar",
 
-    destroyChart("trend");
+        data:{
+          labels,
 
-    state.charts.trend =
-      new Chart(
-        $("trendChart"),
-        {
-          type: "bar",
+          datasets:[
+            {
+              label:"Pengeluaran",
+              data
+            }
+          ]
+        },
 
-          data: {
+        options:{
+          animation:false,
+          responsive:true,
+          maintainAspectRatio:false,
 
-            labels,
-
-            datasets: [
-              {
-                label:
-                  "Pengeluaran",
-
-                data
-              }
-            ]
+          plugins:{
+            legend:{
+              display:false
+            }
           },
 
-          options: {
-
-            responsive: true,
-
-            maintainAspectRatio: true,
-
-            aspectRatio: 1.6,
-
-            animation: false,
-
-            plugins: {
-
-              legend: {
-                display: false
+          scales:{
+            y:{
+              ticks:{
+                callback:v=>money(v),
+                color:"#8e94a7"
+              },
+              grid:{
+                color:"#242837"
               }
             },
 
-            scales: {
-
-              y: {
-
-                ticks: {
-
-                  callback:
-                    v =>
-                      money(v),
-
-                  color:
-                    "#8e94a7"
-                },
-
-                grid: {
-                  color:
-                    "#242837"
-                }
-              },
-
-              x: {
-
-                ticks: {
-                  color:
-                    "#8e94a7"
-                }
+            x:{
+              ticks:{
+                color:"#8e94a7"
               }
             }
           }
         }
-      );
-  }
-
-
-  /* =========================
-     INSIGHT
-     ========================= */
-
-  const insights = [];
-
-  insights.push(
-    `📊 Bulan ini pengeluaran ${money(expense)}.`
-  );
-
-
-  const prev =
-    new Date(
-      m + "-01"
+      }
     );
 
+
+  const prev=
+    new Date(m+"-01");
+
   prev.setMonth(
-    prev.getMonth() - 1
+    prev.getMonth()-1
   );
 
-  const previousMonth =
-    prev
-      .toISOString()
-      .slice(0, 7);
+  const pm=
+    prev.toISOString()
+      .slice(0,7);
 
-  const previousExpense =
-    monthTx(previousMonth)
-      .filter(
-        t =>
-          t.type === "expense"
-      )
+  const pe=
+    monthTx(pm)
+      .filter(t=>t.type==="expense")
       .reduce(
-        (a, t) =>
-          a + Number(t.amount),
+        (a,t)=>a+Number(t.amount),
         0
       );
 
+  const ins=[];
 
-  if (previousExpense > 0) {
+  ins.push(
+    `📊 Bulan ini pengeluaran ${money(exp)}.`
+  );
 
-    const difference =
-      expense -
-      previousExpense;
+  if(pe){
 
-    const percent =
-      Math.round(
-        Math.abs(difference) /
-        previousExpense *
-        100
-      );
-
-    if (difference > 0) {
-
-      insights.push(
-        `⚠️ Pengeluaran naik ${percent}% dibanding bulan lalu.`
-      );
-
-    } else if (difference < 0) {
-
-      insights.push(
-        `✅ Pengeluaran turun ${percent}% dibanding bulan lalu.`
-      );
-
-    } else {
-
-      insights.push(
-        `ℹ️ Pengeluaran sama seperti bulan lalu.`
-      );
-    }
+    ins.push(
+      exp>pe
+        ? `⚠️ Pengeluaran naik ${Math.round((exp-pe)/pe*100)}% dibanding bulan lalu.`
+        : `✅ Pengeluaran turun ${Math.round((pe-exp)/pe*100)}% dibanding bulan lalu.`
+    );
   }
 
-
-  const largest =
-    Object.entries(cats)
+  const max=
+    Object
+      .entries(cats)
       .sort(
-        (a, b) =>
-          b[1] - a[1]
+        (a,b)=>b[1]-a[1]
       )[0];
 
-  if (largest) {
+  if(max){
 
-    insights.push(
-      `💡 Kategori terbesar: ${largest[0]} (${money(largest[1])}).`
+    ins.push(
+      `💡 Kategori terbesar: ${max[0]} (${money(max[1])}).`
     );
   }
 
-
-  if ($("insightList")) {
-
-    $("insightList").innerHTML =
-      insights
-        .map(
-          x =>
-            `<div class="insight">
-              ${x}
-            </div>`
-        )
-        .join("");
-  }
+  $("insightList").innerHTML=
+    ins
+      .map(
+        x=>`<div class="insight">${x}</div>`
+      )
+      .join("");
 }
 
 
-if ($("reportMonth")) {
+$("reportMonth").value=
+  monthISO();
 
-  $("reportMonth").value =
-    monthISO();
+$("reportMonth").onchange=
+  renderReports;
 
-  $("reportMonth").onchange =
-    renderReports;
-}
-
-
-if ($("reportRefresh")) {
-
-  $("reportRefresh").onclick =
-    renderReports;
-}
-
-
-/* =========================================================
-   PART 3/3 — RECURRING TRANSACTION 🔁
-   ========================================================= */
-
-/* ---------- Helper tanggal ---------- */
-
-function localISODate(d) {
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0")
-  ].join("-");
-}
-
-function addRecurringPeriod(date, frequency) {
-  const d = new Date(`${String(date).slice(0, 10)}T00:00:00`);
-
-  if (frequency === "daily") {
-    d.setDate(d.getDate() + 1);
-  }
-
-  else if (frequency === "weekly") {
-    d.setDate(d.getDate() + 7);
-  }
-
-  else if (frequency === "monthly") {
-    const originalDay = d.getDate();
-
-    const nextMonth = new Date(
-      d.getFullYear(),
-      d.getMonth() + 1,
-      1
-    );
-
-    const lastDay = new Date(
-      nextMonth.getFullYear(),
-      nextMonth.getMonth() + 1,
-      0
-    ).getDate();
-
-    d.setFullYear(
-      nextMonth.getFullYear(),
-      nextMonth.getMonth(),
-      Math.min(originalDay, lastDay)
-    );
-  }
-
-  else if (frequency === "yearly") {
-    const originalMonth = d.getMonth();
-    const originalDay = d.getDate();
-
-    d.setFullYear(d.getFullYear() + 1);
-
-    // Handle 29 Februari
-    if (
-      originalMonth === 1 &&
-      originalDay === 29 &&
-      d.getMonth() !== 1
-    ) {
-      d.setMonth(1, 28);
-    }
-  }
-
-  return localISODate(d);
-}
-
-function recurringFrequencyLabel(freq) {
-  const labels = {
-    daily: "Harian",
-    weekly: "Mingguan",
-    monthly: "Bulanan",
-    yearly: "Tahunan"
-  };
-
-  return labels[freq] || freq;
-}
-
-
-/* =========================================================
-   LOAD RECURRING
-   ========================================================= */
-
-async function refreshRecurring() {
-  if (!state.user) return;
-
-  const { data, error } = await db
-    .from("recurring_transactions")
-    .select("*, categories(name,icon)")
-    .eq("user_id", state.user.id)
-    .order("next_date", { ascending: true });
-
-  if (error) {
-    console.error("Gagal load recurring:", error);
-    toast("Gagal memuat recurring transaction");
-    return;
-  }
-
-  state.recurring = data || [];
-}
-
-
-/* =========================================================
-   PROCESS RECURRING OTOMATIS
-   ========================================================= */
-
-async function processRecurring() {
-  if (!state.user || !state.recurring?.length) return;
-
-  const today = todayISO();
-  let insertedSomething = false;
-
-  for (const r of state.recurring) {
-
-    if (!r.active || !r.next_date) continue;
-
-    if (
-      !["daily", "weekly", "monthly", "yearly"]
-        .includes(r.frequency)
-    ) {
-      continue;
-    }
-
-    let next = String(r.next_date).slice(0, 10);
-    let guard = 0;
-
-    /*
-      Guard supaya kalau ada data aneh,
-      loop tidak berjalan selamanya.
-    */
-    while (next <= today && guard < 120) {
-
-      /* -----------------------------------------
-         CEK DUPLIKAT TRANSAKSI
-         ----------------------------------------- */
-
-      let duplicateQuery = db
-        .from("transactions")
-        .select("id")
-        .eq("user_id", state.user.id)
-        .eq("name", r.name)
-        .eq("amount", Number(r.amount))
-        .eq("type", r.type)
-        .eq("transaction_date", next)
-        .limit(1);
-
-      if (r.category) {
-        duplicateQuery = duplicateQuery.eq(
-          "category",
-          r.category
-        );
-      } else {
-        duplicateQuery = duplicateQuery.is(
-          "category",
-          null
-        );
-      }
-
-      const {
-        data: duplicate,
-        error: duplicateError
-      } = await duplicateQuery;
-
-      if (duplicateError) {
-        console.error(
-          "Gagal cek duplicate recurring:",
-          duplicateError
-        );
-        break;
-      }
-
-      /* -----------------------------------------
-         BUAT TRANSAKSI NORMAL
-         ----------------------------------------- */
-
-      if (!duplicate?.length) {
-
-        const transactionPayload = {
-          user_id: state.user.id,
-          name: r.name,
-          amount: Number(r.amount),
-          type: r.type,
-          category: r.category || null,
-          transaction_date: next
-        };
-
-        const {
-          data: inserted,
-          error: insertError
-        } = await db
-          .from("transactions")
-          .insert(transactionPayload)
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error(
-            "Gagal membuat transaksi recurring:",
-            insertError
-          );
-          break;
-        }
-
-        if (inserted) {
-          state.transactions.unshift(inserted);
-        }
-
-        insertedSomething = true;
-      }
-
-      /* -----------------------------------------
-         MAJUKAN NEXT DATE
-         ----------------------------------------- */
-
-      const newNext = addRecurringPeriod(
-        next,
-        r.frequency
-      );
-
-      const {
-        error: updateError
-      } = await db
-        .from("recurring_transactions")
-        .update({
-          next_date: newNext
-        })
-        .eq("id", r.id)
-        .eq("user_id", state.user.id);
-
-      if (updateError) {
-        console.error(
-          "Gagal update next_date:",
-          updateError
-        );
-        break;
-      }
-
-      // Update state lokal juga
-      r.next_date = newNext;
-
-      next = newNext;
-      guard++;
-    }
-  }
-
-  if (insertedSomething) {
-    toast("Recurring transaction otomatis diproses 🔁");
-  }
-}
-
-
-/* =========================================================
-   RENDER RECURRING LIST
-   ========================================================= */
-
-function renderRecurringList() {
-
-  const container = $("recurringList");
-
-  if (!container) return;
-
-  if (!state.recurring?.length) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div style="font-size:32px;">🔁</div>
-        <p>Belum ada recurring transaction.</p>
-      </div>
-    `;
-    return;
-  }
-
-  container.innerHTML = state.recurring.map(r => {
-
-    const categoryName =
-      r.categories?.name ||
-      r.category ||
-      "Tanpa kategori";
-
-    const icon =
-      r.categories?.icon ||
-      "🔁";
-
-    const status =
-      r.active
-        ? `<span class="badge success">Aktif</span>`
-        : `<span class="badge">Nonaktif</span>`;
-
-    const amount =
-      Number(r.amount || 0).toLocaleString(
-        "id-ID"
-      );
-
-    return `
-      <div class="transaction-item"
-           style="margin-bottom:10px;">
-
-        <div style="
-          display:flex;
-          align-items:center;
-          gap:12px;
-        ">
-
-          <div style="
-            width:42px;
-            height:42px;
-            border-radius:12px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            background:var(--card);
-            font-size:20px;
-          ">
-            ${icon}
-          </div>
-
-          <div style="flex:1;">
-
-            <div style="
-              font-weight:600;
-              margin-bottom:4px;
-            ">
-              ${escapeHTML(r.name)}
-            </div>
-
-            <div style="
-              font-size:12px;
-              opacity:.7;
-            ">
-              ${categoryName}
-              •
-              ${recurringFrequencyLabel(r.frequency)}
-            </div>
-
-            <div style="
-              font-size:12px;
-              opacity:.7;
-              margin-top:3px;
-            ">
-              Berikutnya:
-              ${formatDate(r.next_date)}
-            </div>
-
-          </div>
-
-          <div style="
-            text-align:right;
-          ">
-
-            <div style="
-              font-weight:700;
-              margin-bottom:5px;
-            ">
-              Rp ${amount}
-            </div>
-
-            ${status}
-
-          </div>
-
-        </div>
-
-        ${
-          r.note
-            ? `
-              <div style="
-                font-size:12px;
-                opacity:.7;
-                margin-top:8px;
-                padding-left:54px;
-              ">
-                📝 ${escapeHTML(r.note)}
-              </div>
-            `
-            : ""
-        }
-
-        <div style="
-          display:flex;
-          gap:8px;
-          margin-top:10px;
-          padding-left:54px;
-        ">
-
-          <button
-            class="btn btn-sm"
-            onclick="editRecurring('${r.id}')">
-            ✏️ Edit
-          </button>
-
-          <button
-            class="btn btn-sm"
-            onclick="toggleRecurring('${r.id}')">
-            ${r.active ? "⏸️ Nonaktifkan" : "▶️ Aktifkan"}
-          </button>
-
-          <button
-            class="btn btn-sm danger"
-            onclick="deleteRecurring('${r.id}')">
-            🗑️
-          </button>
-
-        </div>
-
-      </div>
-    `;
-
-  }).join("");
-}
-
-
-/* =========================================================
-   OPEN RECURRING MODAL
-   ========================================================= */
-
-function openRecurringModal(editing = null) {
-
-  const title = editing
-    ? "Edit Recurring Transaction"
-    : "Recurring Transaction 🔁";
-
-  openModal(title);
-
-  const modalBody =
-    $("modalBody") ||
-    $("modalContent") ||
-    $("modal-body");
-
-  if (!modalBody) {
-    console.error("Modal body tidak ditemukan");
-    return;
-  }
-
-  const selectedType =
-    editing?.type || "expense";
-
-  modalBody.innerHTML = `
-
-    <form id="recurringForm">
-
-      <div class="form-group">
-
-        <label>Nama</label>
-
-        <input
-          id="rName"
-          type="text"
-          placeholder="Contoh: Gaji bulanan"
-          value="${escapeHTML(editing?.name || "")}"
-          required
-        >
-
-      </div>
-
-
-      <div class="form-group">
-
-        <label>Jumlah</label>
-
-        <input
-          id="rAmount"
-          type="number"
-          min="0"
-          step="1"
-          placeholder="0"
-          value="${editing?.amount ?? ""}"
-          required
-        >
-
-      </div>
-
-
-      <div class="form-group">
-
-        <label>Jenis</label>
-
-        <select id="rType">
-
-          <option
-            value="expense"
-            ${selectedType === "expense" ? "selected" : ""}>
-            Pengeluaran
-          </option>
-
-          <option
-            value="income"
-            ${selectedType === "income" ? "selected" : ""}>
-            Pemasukan
-          </option>
-
-        </select>
-
-      </div>
-
-
-      <div class="form-group">
-
-        <label>Kategori</label>
-
-        <select id="rCategory">
-
-          ${categoryOptions(
-            selectedType,
-            editing?.category_id || ""
-          )}
-
-        </select>
-
-      </div>
-
-
-      <div class="form-group">
-
-        <label>Frekuensi</label>
-
-        <select id="rFrequency">
-
-          <option
-            value="daily"
-            ${editing?.frequency === "daily" ? "selected" : ""}>
-            Harian
-          </option>
-
-          <option
-            value="weekly"
-            ${editing?.frequency === "weekly" ? "selected" : ""}>
-            Mingguan
-          </option>
-
-          <option
-            value="monthly"
-            ${editing?.frequency === "monthly" || !editing ? "selected" : ""}>
-            Bulanan
-          </option>
-
-          <option
-            value="yearly"
-            ${editing?.frequency === "yearly" ? "selected" : ""}>
-            Tahunan
-          </option>
-
-        </select>
-
-      </div>
-
-
-      <div class="form-group">
-
-        <label>Tanggal berikutnya</label>
-
-        <input
-          id="rDate"
-          type="date"
-          value="${editing?.next_date || todayISO()}"
-          required
-        >
-
-      </div>
-
-
-      <div class="form-group">
-
-        <label>Catatan</label>
-
-        <textarea
-          id="rNote"
-          rows="3"
-          placeholder="Opsional"
-        >${escapeHTML(editing?.note || "")}</textarea>
-
-      </div>
-
-
-      <div class="form-group">
-
-        <label style="
-          display:flex;
-          align-items:center;
-          gap:8px;
-        ">
-
-          <input
-            id="rActive"
-            type="checkbox"
-            ${editing?.active !== false ? "checked" : ""}
-          >
-
-          Aktif
-
-        </label>
-
-      </div>
-
-
-      <div style="
-        display:flex;
-        gap:10px;
-        margin-top:16px;
-      ">
-
-        <button
-          type="submit"
-          class="btn btn-primary"
-          style="flex:1;">
-
-          ${editing ? "💾 Simpan Perubahan" : "➕ Tambah"}
-
-        </button>
-
-        <button
-          type="button"
-          class="btn"
-          onclick="closeModal()">
-
-          Batal
-
-        </button>
-
-      </div>
-
-    </form>
-
-
-    ${
-      editing
-        ? ""
-        : `
-          <hr style="
-            margin:22px 0;
-            opacity:.15;
-          ">
-
-          <h3 style="margin-bottom:12px;">
-            Daftar Recurring
-          </h3>
-
-          <div id="recurringList"></div>
-        `
-    }
-
-  `;
-
-
-  /* -----------------------------------------
-     TYPE → CATEGORY
-     ----------------------------------------- */
-
-  $("rType").addEventListener("change", () => {
-
-    const currentCategory =
-      $("rCategory").value;
-
-    $("rCategory").innerHTML =
-      categoryOptions(
-        $("rType").value,
-        currentCategory
-      );
-
-  });
-
-
-  /* -----------------------------------------
-     SUBMIT
-     ----------------------------------------- */
-
-  $("recurringForm").addEventListener(
-    "submit",
-    async e => {
-
-      e.preventDefault();
-
-      if (!state.user) {
-        toast("Silakan login terlebih dahulu");
-        return;
-      }
-
-      const categoryId =
-        $("rCategory").value || null;
-
-      const category =
-        state.categories.find(
-          c => String(c.id) === String(categoryId)
-        );
-
-      /*
-        PENTING:
-        recurring_transactions membutuhkan
-        category_id DAN category
-      */
-
-      const payload = {
-
-        user_id: state.user.id,
-
-        name:
-          $("rName").value.trim(),
-
-        amount:
-          Number($("rAmount").value),
-
-        type:
-          $("rType").value,
-
-        category_id:
-          category?.id || null,
-
-        category:
-          category?.name || null,
-
-        frequency:
-          $("rFrequency").value,
-
-        next_date:
-          $("rDate").value,
-
-        note:
-          $("rNote").value.trim() || null,
-
-        active:
-          $("rActive").checked
-
-      };
-
-
-      if (!payload.name) {
-        toast("Nama recurring wajib diisi");
-        return;
-      }
-
-      if (!payload.amount || payload.amount < 0) {
-        toast("Jumlah transaksi tidak valid");
-        return;
-      }
-
-      if (!payload.next_date) {
-        toast("Tanggal wajib diisi");
-        return;
-      }
-
-
-      let result;
-
-      if (editing) {
-
-        result = await db
-          .from("recurring_transactions")
-          .update(payload)
-          .eq("id", editing.id)
-          .eq("user_id", state.user.id);
-
-      } else {
-
-        result = await db
-          .from("recurring_transactions")
-          .insert(payload);
-
-      }
-
-
-      if (result.error) {
-
-        console.error(
-          "Recurring save error:",
-          result.error
-        );
-
-        toast(
-          "Gagal menyimpan recurring: " +
-          result.error.message
-        );
-
-        return;
-      }
-
-
-      toast(
-        editing
-          ? "Recurring berhasil diperbarui ✅"
-          : "Recurring berhasil ditambahkan ✅"
-      );
-
-
-      await refreshRecurring();
-
-      closeModal();
-
-      renderAll();
-
-    }
-  );
-
-
-  /* -----------------------------------------
-     LIST
-     ----------------------------------------- */
-
-  if (!editing) {
-    renderRecurringList();
-  }
-
-}
-
-
-/* =========================================================
-   EDIT RECURRING
-   ========================================================= */
-
-window.editRecurring = async function(id) {
-
-  const recurring =
-    state.recurring.find(
-      r => String(r.id) === String(id)
-    );
-
-  if (!recurring) {
-    toast("Recurring tidak ditemukan");
-    return;
-  }
-
-  openRecurringModal(recurring);
-};
-
-
-/* =========================================================
-   DELETE RECURRING
-   ========================================================= */
-
-window.deleteRecurring = async function(id) {
-
-  const recurring =
-    state.recurring.find(
-      r => String(r.id) === String(id)
-    );
-
-  if (!recurring) return;
-
-  const ok = confirm(
-    `Hapus recurring "${recurring.name}"?`
-  );
-
-  if (!ok) return;
-
-
-  const { error } = await db
-    .from("recurring_transactions")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", state.user.id);
-
-
-  if (error) {
-
-    console.error(error);
-
-    toast(
-      "Gagal menghapus recurring"
-    );
-
-    return;
-  }
-
-
-  state.recurring =
-    state.recurring.filter(
-      r => String(r.id) !== String(id)
-    );
-
-  toast("Recurring dihapus 🗑️");
-
-  openRecurringModal();
-
-  renderAll();
-
-};
-
-
-/* =========================================================
-   TOGGLE ACTIVE / NONACTIVE
-   ========================================================= */
-
-window.toggleRecurring = async function(id) {
-
-  const recurring =
-    state.recurring.find(
-      r => String(r.id) === String(id)
-    );
-
-  if (!recurring) return;
-
-
-  const newStatus =
-    !recurring.active;
-
-
-  const { error } = await db
-    .from("recurring_transactions")
-    .update({
-      active: newStatus
-    })
-    .eq("id", id)
-    .eq("user_id", state.user.id);
-
-
-  if (error) {
-
-    console.error(error);
-
-    toast(
-      "Gagal mengubah status recurring"
-    );
-
-    return;
-  }
-
-
-  recurring.active = newStatus;
-
-  toast(
-    newStatus
-      ? "Recurring diaktifkan ▶️"
-      : "Recurring dinonaktifkan ⏸️"
-  );
-
-  openRecurringModal();
-
-  renderAll();
-
-};
-
-
-/* =========================================================
-   TOMBOL "LAINNYA"
-   ========================================================= */
-
-if ($("recurringBtn")) {
-
-  $("recurringBtn").onclick = () => {
-    openRecurringModal();
-  };
-
-}
-
-
-if ($("notificationBtn")) {
-
-  $("notificationBtn").onclick = () => {
-
-    const today = todayISO();
-
-    const due =
-      (state.recurring || [])
-        .filter(r =>
-          r.active &&
-          r.next_date &&
-          String(r.next_date).slice(0, 10) <= today
-        );
-
-    if (due.length) {
-
-      toast(
-        `${due.length} recurring transaction menunggu diproses.`
-      );
-
-    } else {
-
-      toast(
-        "Tidak ada recurring transaction yang jatuh tempo. ✅"
-      );
-
-    }
-
-  };
-
-}
-
-
-/* =========================================================
-   JALANKAN RECURRING SAAT APP LOAD
-   ========================================================= */
-
-/*
-  loadAll() dari Part 1 sudah ada.
-  Kita bungkus supaya setelah data selesai dimuat,
-  recurring otomatis diproses.
-*/
-
-const __finovaOriginalLoadAll = loadAll;
-
-loadAll = async function () {
-
-  await __finovaOriginalLoadAll();
-
-  await processRecurring();
-
-  renderAll();
-
-};
-
-
-/* =========================================================
-   SELESAI PART 3
-   ========================================================= */
+$("reportRefresh").onclick=
+  renderReports;
