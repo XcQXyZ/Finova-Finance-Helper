@@ -379,7 +379,7 @@ async function loadAll(){
  results.forEach((r,i)=>{if(r.error) throw r.error; state[names[i]]=r.data||null});
  if(!state.settings){await saveSettings({currency:"IDR",theme:"dark",notifications:true});state.settings={theme:"dark"}}
  if(!state.categories.length) await seedCategories();
- applyTheme(); processRecurring(); renderAll();
+ applyTheme(); renderAll();
 }
 async function seedCategories(){
  const base=[["🍔","Makanan","expense"],["🚌","Transportasi","expense"],["🎮","Hiburan","expense"],["📚","Pendidikan","expense"],["🛍️","Belanja","expense"],["💡","Tagihan","expense"],["🏠","Rumah","expense"],["📦","Lainnya","expense"],["💼","Gaji","income"],["💻","Freelance","income"],["🎁","Bonus","income"],["💰","Lainnya","income"]];
