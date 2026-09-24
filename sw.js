@@ -1,4 +1,4 @@
-const CACHE="finova-v3";
+const CACHE="finova-v4";
 const ASSETS=["./","./index.html","./css/style.css","./js/app.js","./manifest.json"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
 self.addEventListener("activate",e=>e.waitUntil(self.clients.claim()));
