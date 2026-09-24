@@ -1,27 +1,363 @@
-
 const SUPABASE_URL = "https://krzttskzpbajyprowdqd.supabase.co";
 const SUPABASE_KEY = "sb_publishable_s760LsBrsEmoPrRJjSoC7w_cVeud0bg";
+
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = id => document.getElementById(id);
-const money = n => new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(Number(n)||0);
-const todayISO = () => new Date().toISOString().slice(0,10);
-const monthISO = () => todayISO().slice(0,7);
-const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const state = {user:null,transactions:[],categories:[],budgets:[],goals:[],recurring:[],settings:null,authMode:"login",charts:{},reportMonth:monthISO(),deferredInstall:null};
 
-function toast(msg){$("toast").textContent=msg;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2500)}
-function fail(e){console.error(e);toast(e?.message||"Terjadi kesalahan.")}
+const money = n =>
+  new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0
+  }).format(Number(n) || 0);
 
-document.querySelectorAll("[data-auth]").forEach(b=>b.onclick=()=>{state.authMode=b.dataset.auth;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));$("authSubmit").textContent=state.authMode==="login"?"Masuk":"Daftar";});
-$("authForm").onsubmit=async e=>{
- e.preventDefault();
- const email=$("authEmail").value.trim(),password=$("authPassword").value;
- try{
-  const r=state.authMode==="login"?await db.auth.signInWithPassword({email,password}):await db.auth.signUp({email,password});
-  if(r.error) throw r.error;
-  if(state.authMode==="register") toast("Akun dibuat. Jika email confirmation aktif, cek emailmu.");
- }catch(err){fail(err)}
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const monthISO = () => todayISO().slice(0, 7);
+
+const esc = s =>
+  String(s ?? "").replace(
+    /[&<>"']/g,
+    c => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    }[c])
+  );
+
+const state = {
+  user: null,
+  transactions: [],
+  categories: [],
+  budgets: [],
+  goals: [],
+  recurring: [],
+  settings: null,
+  authMode: "login",
+  charts: {},
+  reportMonth: monthISO(),
+  deferredInstall: null
+};
+
+let authBusy = false;
+
+function toast(msg) {
+  $("toast").textContent = msg;
+  $("toast").classList.add("show");
+
+  clearTimeout(window.__toastTimer);
+
+  window.__toastTimer = setTimeout(() => {
+    $("toast").classList.remove("show");
+  }, 3500);
+}
+
+function fail(error) {
+  console.error("FINOVA ERROR:", error);
+
+  const code = error?.code || "";
+  const status = error?.status || "";
+  const message = error?.message || "";
+
+  if (status === 429 || code === "over_request_rate_limit") {
+    toast("Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.");
+    return;
+  }
+
+  if (
+    code === "email_not_confirmed" ||
+    message.toLowerCase().includes("email not confirmed")
+  ) {
+    toast("Email belum diverifikasi. Cek email dari Supabase.");
+    return;
+  }
+
+  if (
+    code === "invalid_credentials" ||
+    message.toLowerCase().includes("invalid login credentials")
+  ) {
+    toast("Email atau password salah.");
+    return;
+  }
+
+  if (
+    message.toLowerCase().includes("failed to fetch") ||
+    message.toLowerCase().includes("network")
+  ) {
+    toast("Koneksi ke Supabase gagal. Periksa internet lalu coba lagi.");
+    return;
+  }
+
+  if (code === "user_already_exists") {
+    toast("Email tersebut sudah terdaftar. Silakan Masuk.");
+    return;
+  }
+
+  toast(message || "Terjadi kesalahan. Coba lagi.");
+}
+
+
+/* =========================
+   LOGIN / REGISTER
+========================= */
+
+document.querySelectorAll("[data-auth]").forEach(button => {
+  button.onclick = () => {
+    state.authMode = button.dataset.auth;
+
+    document
+      .querySelectorAll(".tab")
+      .forEach(tab => tab.classList.toggle("active", tab === button));
+
+    $("authSubmit").textContent =
+      state.authMode === "login" ? "Masuk" : "Daftar";
+
+    $("authPassword").value = "";
+
+    $("authHint").textContent =
+      state.authMode === "login"
+        ? "Belum punya akun? Pilih Daftar."
+        : "Sudah punya akun? Pilih Masuk.";
+  };
+});
+
+
+$("authForm").onsubmit = async event => {
+  event.preventDefault();
+
+  if (authBusy) return;
+
+  const email = $("authEmail").value.trim();
+  const password = $("authPassword").value;
+
+  if (!email || !password) {
+    toast("Email dan password wajib diisi.");
+    return;
+  }
+
+  if (password.length < 6) {
+    toast("Password minimal 6 karakter.");
+    return;
+  }
+
+  authBusy = true;
+
+  const button = $("authSubmit");
+  const originalText = button.textContent;
+
+  button.disabled = true;
+  button.textContent =
+    state.authMode === "login"
+      ? "Memproses..."
+      : "Mendaftarkan...";
+
+  try {
+
+    if (state.authMode === "login") {
+
+      const { data, error } =
+        await db.auth.signInWithPassword({
+          email,
+          password
+        });
+
+      if (error) {
+        console.error("LOGIN ERROR:", error);
+        throw error;
+      }
+
+      if (!data?.session) {
+        toast("Login belum menghasilkan session. Coba lagi.");
+        return;
+      }
+
+      state.user = data.user;
+
+      toast("Login berhasil. Memuat Finova...");
+
+      await showApp(data.session);
+
+    } else {
+
+      const { data, error } =
+        await db.auth.signUp({
+          email,
+          password
+        });
+
+      if (error) {
+        console.error("REGISTER ERROR:", error);
+        throw error;
+      }
+
+      if (data?.session) {
+
+        state.user = data.user;
+
+        toast("Akun berhasil dibuat.");
+
+        await showApp(data.session);
+
+      } else {
+
+        toast(
+          "Akun berhasil dibuat. Cek email untuk verifikasi terlebih dahulu."
+        );
+
+        state.authMode = "login";
+
+        document
+          .querySelectorAll(".tab")
+          .forEach(tab =>
+            tab.classList.toggle(
+              "active",
+              tab.dataset.auth === "login"
+            )
+          );
+
+        $("authSubmit").textContent = "Masuk";
+      }
+    }
+
+  } catch (error) {
+
+    fail(error);
+
+  } finally {
+
+    authBusy = false;
+
+    button.disabled = false;
+    button.textContent =
+      state.authMode === "login"
+        ? "Masuk"
+        : "Daftar";
+  }
+};
+
+
+/* =========================
+   AUTH SESSION
+========================= */
+
+function showAuth() {
+  $("authView").classList.remove("hidden");
+  $("appView").classList.add("hidden");
+}
+
+async function showApp(session) {
+
+  if (!session?.user) {
+    showAuth();
+    return;
+  }
+
+  state.user = session.user;
+
+  $("authView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+
+  try {
+
+    await loadAll();
+
+  } catch (error) {
+
+    console.error("LOAD APP ERROR:", error);
+
+    $("authView").classList.remove("hidden");
+    $("appView").classList.add("hidden");
+
+    fail(error);
+  }
+}
+
+
+/* =========================
+   CHECK SESSION SAAT APP DIBUKA
+========================= */
+
+async function initAuth() {
+
+  try {
+
+    const {
+      data: { session },
+      error
+    } = await db.auth.getSession();
+
+    if (error) {
+      throw error;
+    }
+
+    if (session?.user) {
+      await showApp(session);
+    } else {
+      showAuth();
+    }
+
+  } catch (error) {
+
+    console.error("AUTH INIT ERROR:", error);
+
+    showAuth();
+
+    fail(error);
+  }
+}
+
+
+/* =========================
+   PERUBAHAN LOGIN / LOGOUT
+========================= */
+
+db.auth.onAuthStateChange(async (event, session) => {
+
+  console.log(
+    "AUTH EVENT:",
+    event,
+    session?.user?.email || "tidak ada session"
+  );
+
+  if (event === "SIGNED_IN" && session?.user) {
+    state.user = session.user;
+
+    if ($("appView").classList.contains("hidden")) {
+      await showApp(session);
+    }
+  }
+
+  if (event === "SIGNED_OUT") {
+    state.user = null;
+    showAuth();
+  }
+});
+
+
+/* Jalankan pemeriksaan session */
+initAuth();
+
+
+/* =========================
+   LOGOUT
+========================= */
+
+$("logoutBtn").onclick = async () => {
+
+  try {
+
+    const { error } = await db.auth.signOut();
+
+    if (error) throw error;
+
+    toast("Berhasil keluar.");
+
+  } catch (error) {
+
+    fail(error);
+  }
 };
 $("logoutBtn").onclick=async()=>{await db.auth.signOut();location.reload()};
 $("themeBtn").onclick=async()=>{document.body.classList.toggle("light");await saveSettings({theme:document.body.classList.contains("light")?"light":"dark"})};
