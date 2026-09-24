@@ -1528,6 +1528,8 @@ window.deleteTransaction =
       toast("Transaksi dihapus.");
     }
   };
+
+
 /* =========================
    BUDGET
 ========================= */
@@ -2529,6 +2531,8 @@ if ($("reportRefresh")) {
   $("reportRefresh").onclick =
     renderReports;
 }
+
+
 /* =========================================================
    PART 3/3 — RECURRING TRANSACTION 🔁
    ========================================================= */
