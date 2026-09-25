@@ -1,3 +1,4 @@
+alert("APP JS MULAI");
 const SUPABASE_URL = "https://krzttskzpbajyprowdqd.supabase.co";
 const SUPABASE_KEY = "sb_publishable_s760LsBrsEmoPrRJjSoC7w_cVeud0bg";
 
