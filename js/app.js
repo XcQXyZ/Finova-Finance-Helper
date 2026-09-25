@@ -2496,7 +2496,7 @@ function renderReports(){
         options:{
           animation:false,
           responsive:true,
-          maintainAspectRatio:false,
+          maintainAspectRatio:true,aspectRatio:2
 
           plugins:{
             legend:{
