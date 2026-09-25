@@ -57,6 +57,110 @@ function addRecurringPeriod(date, frequency){
 
   return d.toISOString().slice(0, 10);
 }
+async function processRecurring(){
+  if(!state.user || !Array.isArray(state.recurring) || !state.recurring.length){
+    return;
+  }
+
+  const today = todayISO();
+  let inserted = 0;
+
+  for(const r of state.recurring){
+
+    if(!r.active || !r.next_date){
+      continue;
+    }
+
+    let next = r.next_date;
+    let guard = 0;
+
+    while(next <= today && guard < 120){
+
+      guard++;
+
+      const existing = await db
+        .from("transactions")
+        .select("id")
+        .eq("user_id", state.user.id)
+        .eq("name", r.name)
+        .eq("amount", Number(r.amount))
+        .eq("type", r.type)
+        .eq("transaction_date", next)
+        .eq("category", r.category || "")
+        .limit(1);
+
+      if(existing.error){
+        fail(existing.error);
+        return;
+      }
+
+      if(!existing.data || !existing.data.length){
+
+        const tx = {
+          user_id: state.user.id,
+          name: r.name,
+          amount: Number(r.amount),
+          type: r.type,
+          category: r.category || null,
+          transaction_date: next
+        };
+
+        const result = await db
+          .from("transactions")
+          .insert(tx);
+
+        if(result.error){
+          fail(result.error);
+          return;
+        }
+
+        inserted++;
+      }
+
+      next = addRecurringPeriod(next, r.frequency);
+    }
+
+    if(next !== r.next_date){
+
+      const update = await db
+        .from("recurring_transactions")
+        .update({
+          next_date: next
+        })
+        .eq("id", r.id)
+        .eq("user_id", state.user.id);
+
+      if(update.error){
+        fail(update.error);
+        return;
+      }
+
+      r.next_date = next;
+    }
+  }
+
+  if(inserted > 0){
+
+    const result = await db
+      .from("transactions")
+      .select("*")
+      .eq("user_id", state.user.id)
+      .order("transaction_date", {ascending:false})
+      .order("created_at", {ascending:false});
+
+    if(result.error){
+      fail(result.error);
+      return;
+    }
+
+    state.transactions = result.data || [];
+
+    renderAll();
+
+    toast(`${inserted} transaksi berulang dibuat otomatis.`);
+  }
+}
+
 const esc = s =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -304,7 +408,8 @@ async function showApp(session) {
   try {
 
     await loadAll();
-
+    await processRecurring();
+    
   } catch (error) {
 
     console.error("LOAD APP ERROR:", error);
