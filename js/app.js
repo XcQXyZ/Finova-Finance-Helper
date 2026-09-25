@@ -533,13 +533,183 @@ window.deleteCategory=async id=>{
 
 $("categoriesBtn").onclick=renderCategoryManager;
 
-$("recurringBtn").onclick=()=>openModal(
-  "Transaksi berulang",
-  `<div class="muted">
-    Menu ini sudah aktif, tetapi fitur transaksi berulang belum kita implementasikan.
-    Kita biarkan aman dulu supaya fitur transaksi utama tetap stabil.
-  </div>`
-);
+$("recurringBtn").onclick=()=>{
+  const recurring=state.recurring||[];
+
+  const typeOptions=`
+    <option value="expense">Pengeluaran</option>
+    <option value="income">Pemasukan</option>
+  `;
+
+  const categoryOptions=(type)=>{
+    const cats=(state.categories||[]).filter(c=>c.type===type||c.type==="both");
+    return cats.map(c=>`<option value="${esc(c.id)}">${esc(c.icon||"")} ${esc(c.name)}</option>`).join("");
+  };
+
+  const list=recurring.length
+    ? recurring.map(r=>`
+      <div class="card" style="padding:12px">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+          <div>
+            <strong>${esc(r.name)}</strong>
+            <div class="muted">${money(r.amount)} · ${r.frequency} · berikutnya ${esc(r.next_date||"-")}</div>
+            <div class="muted">${esc(r.category||"Tanpa kategori")} · ${r.active?"Aktif":"Nonaktif"}</div>
+          </div>
+          <button class="btn" data-del-recurring="${esc(r.id)}">Hapus</button>
+        </div>
+      </div>
+    `).join("")
+    : `<div class="muted">Belum ada transaksi berulang.</div>`;
+
+  openModal("Transaksi berulang",`
+    <div class="stack">
+      <div>
+        <label>Nama transaksi</label>
+        <input id="rName" placeholder="Contoh: Gaji bulanan">
+      </div>
+
+      <div>
+        <label>Jumlah</label>
+        <input id="rAmount" type="number" min="0" placeholder="Contoh: 5000000">
+      </div>
+
+      <div>
+        <label>Jenis</label>
+        <select id="rType">
+          ${typeOptions}
+        </select>
+      </div>
+
+      <div>
+        <label>Kategori</label>
+        <select id="rCategory">
+          ${categoryOptions("expense")}
+        </select>
+      </div>
+
+      <div>
+        <label>Frekuensi</label>
+        <select id="rFrequency">
+          <option value="daily">Harian</option>
+          <option value="weekly">Mingguan</option>
+          <option value="monthly" selected>Bulanan</option>
+          <option value="yearly">Tahunan</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Transaksi berikutnya</label>
+        <input id="rDate" type="date" value="${todayISO()}">
+      </div>
+
+      <div>
+        <label>Catatan</label>
+        <textarea id="rNote" placeholder="Opsional"></textarea>
+      </div>
+
+      <label style="display:flex;gap:10px;align-items:center">
+        <input id="rActive" type="checkbox" checked>
+        Aktif
+      </label>
+
+      <div class="form-actions">
+        <button class="primary" id="saveRecurring">Simpan transaksi berulang</button>
+      </div>
+
+      <hr>
+
+      <strong>Daftar transaksi berulang</strong>
+      <div class="stack">
+        ${list}
+      </div>
+    </div>
+  `);
+
+  $("rType").onchange=()=>{
+    $("rCategory").innerHTML=categoryOptions($("rType").value);
+  };
+
+  $("saveRecurring").onclick=async()=>{
+    const type=$("rType").value;
+    const c=(state.categories||[]).find(x=>x.id===$("rCategory").value);
+
+    const payload={
+      user_id:state.user.id,
+      name:$("rName").value.trim(),
+      amount:Number($("rAmount").value),
+      type,
+      category_id:c?.id||null,
+      category:c?.name||null,
+      frequency:$("rFrequency").value,
+      next_date:$("rDate").value,
+      note:$("rNote").value.trim()||null,
+      active:$("rActive").checked
+    };
+
+    if(!payload.name){
+      toast("Nama transaksi wajib diisi.");
+      return;
+    }
+
+    if(!payload.amount||payload.amount<=0){
+      toast("Jumlah transaksi harus lebih dari 0.");
+      return;
+    }
+
+    if(!payload.next_date){
+      toast("Tanggal berikutnya wajib diisi.");
+      return;
+    }
+
+    const r=await db.from("recurring_transactions").insert(payload);
+
+    if(r.error){
+      fail(r.error);
+      return;
+    }
+
+    toast("Transaksi berulang berhasil disimpan.");
+
+    const fresh=await db
+      .from("recurring_transactions")
+      .select("*, categories(name,icon)")
+      .eq("user_id",state.user.id)
+      .order("next_date");
+
+    if(fresh.error){
+      fail(fresh.error);
+      return;
+    }
+
+    state.recurring=fresh.data||[];
+    closeModal();
+    $("recurringBtn").click();
+  };
+
+  document.querySelectorAll("[data-del-recurring]").forEach(btn=>{
+    btn.onclick=async()=>{
+      const id=btn.dataset.delRecurring;
+
+      if(!confirm("Hapus transaksi berulang ini?")) return;
+
+      const r=await db
+        .from("recurring_transactions")
+        .delete()
+        .eq("id",id)
+        .eq("user_id",state.user.id);
+
+      if(r.error){
+        fail(r.error);
+        return;
+      }
+
+      state.recurring=(state.recurring||[]).filter(x=>x.id!==id);
+      toast("Transaksi berulang dihapus.");
+      closeModal();
+      $("recurringBtn").click();
+    };
+  });
+};
 
 $("notificationBtn").onclick=()=>{
 
