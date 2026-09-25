@@ -486,6 +486,7 @@ db.auth.onAuthStateChange(async (event, session) => {
 
 
 /* Jalankan pemeriksaan session */
+alert("JAVASCRIPT FINOVA AKTIF");
 initAuth();
 
 
