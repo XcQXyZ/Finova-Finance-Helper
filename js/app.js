@@ -1,4 +1,4 @@
-alert("APP JS MULAI");
+document.body.insertAdjacentHTML("afterbegin", "<h1 style='color:red'>APP JS JALAN</h1>");
 const SUPABASE_URL = "https://krzttskzpbajyprowdqd.supabase.co";
 const SUPABASE_KEY = "sb_publishable_s760LsBrsEmoPrRJjSoC7w_cVeud0bg";
 
