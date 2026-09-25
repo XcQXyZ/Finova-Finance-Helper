@@ -271,6 +271,9 @@ document.querySelectorAll("[data-auth]").forEach(button => {
 
 
 $("authForm").onsubmit = async event => {
+
+  alert("TOMBOL LOGIN TERDETEKSI");
+  
   event.preventDefault();
 
   if (authBusy) return;
