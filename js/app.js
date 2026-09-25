@@ -410,13 +410,14 @@ try {
   // await processRecurring();
 } catch (error) {
 
-    console.error("LOAD APP ERROR:", error);
+  console.error("LOAD APP ERROR:", error);
 
-    $("authView").classList.remove("hidden");
-    $("appView").classList.add("hidden");
+  alert("ERROR LOAD APP:\n" + (error?.message || error));
 
-    fail(error);
-  }
+  $("authView").classList.remove("hidden");
+  $("appView").classList.add("hidden");
+
+  fail(error);
 }
 
 
