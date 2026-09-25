@@ -405,12 +405,10 @@ async function showApp(session) {
   $("authView").classList.add("hidden");
   $("appView").classList.remove("hidden");
 
-  try {
-
-    await loadAll();
-    await processRecurring();
-    
-  } catch (error) {
+try {
+  await loadAll();
+  // await processRecurring();
+} catch (error) {
 
     console.error("LOAD APP ERROR:", error);
 
