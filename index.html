@@ -139,5 +139,19 @@ fetch("js/app.js?v=5")
   .then(r => alert("APP.JS STATUS: " + r.status + " | TYPE: " + r.headers.get("content-type")))
   .catch(e => alert("APP.JS ERROR: " + e.message));
   </script>
-  <script src="/js/app.js?v=6"></script>
+  <script>
+const testScript = document.createElement("script");
+
+testScript.src = "/js/app.js?v=7";
+
+testScript.onload = () => {
+  alert("APP.JS BERHASIL DIMUAT");
+};
+
+testScript.onerror = () => {
+  alert("APP.JS GAGAL DIMUAT");
+};
+
+document.body.appendChild(testScript);
+</script>
 </html>
