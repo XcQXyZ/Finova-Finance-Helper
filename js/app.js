@@ -15,6 +15,48 @@ const money = n =>
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const monthISO = () => todayISO().slice(0, 7);
 
+function addRecurringPeriod(date, frequency){
+  const d = new Date(date + "T00:00:00");
+
+  if(frequency === "daily"){
+    d.setDate(d.getDate() + 1);
+
+  }else if(frequency === "weekly"){
+    d.setDate(d.getDate() + 7);
+
+  }else if(frequency === "monthly"){
+    const day = d.getDate();
+
+    d.setDate(1);
+    d.setMonth(d.getMonth() + 1);
+
+    const lastDay = new Date(
+      d.getFullYear(),
+      d.getMonth() + 1,
+      0
+    ).getDate();
+
+    d.setDate(Math.min(day, lastDay));
+
+  }else if(frequency === "yearly"){
+    const month = d.getMonth();
+    const day = d.getDate();
+
+    d.setDate(1);
+    d.setFullYear(d.getFullYear() + 1);
+    d.setMonth(month);
+
+    const lastDay = new Date(
+      d.getFullYear(),
+      d.getMonth() + 1,
+      0
+    ).getDate();
+
+    d.setDate(Math.min(day, lastDay));
+  }
+
+  return d.toISOString().slice(0, 10);
+}
 const esc = s =>
   String(s ?? "").replace(
     /[&<>"']/g,
