@@ -1202,12 +1202,7 @@ function renderCashflowChart(){
         ]
       },
 
-      options:{
-        animation:false,
-        responsive:true,
-        maintainAspectRatio:false,
-
-        plugins:{
+      options:{animation:false,responsive:true,maintainAspectRatio:true,aspectRatio:1.5,plugins:{
           legend:{
             labels:{
               color:getComputedStyle(document.body)
