@@ -1,2 +1,2 @@
-# Finova-Finance-Helper
+# Finova—Financial Manager
 Finova - financial management web application 
