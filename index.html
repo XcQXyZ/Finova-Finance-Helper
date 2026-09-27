@@ -127,36 +127,8 @@
   </div>
 
   <div id="modal" class="modal hidden"><div class="modal-backdrop"></div><div class="modal-card"><div class="modal-head"><h2 id="modalTitle"></h2><button class="icon-btn" id="closeModal">×</button></div><div id="modalBody"></div></div></div>
-  <script>
-alert("INDEX HTML AKTIF");
-  </script>
-<script>
-alert("SCRIPT INLINE JALAN");
-</script>
 
-  <script>
-fetch("js/app.js?v=5")
-  .then(r => alert("APP.JS STATUS: " + r.status + " | TYPE: " + r.headers.get("content-type")))
-  .catch(e => alert("APP.JS ERROR: " + e.message));
-  </script>
-  
-  <script>
-alert("TES SETELAH FETCH");
-  </script>
-  
-  <script>
-const testScript = document.createElement("script");
+  <script src="js/app.js?v=8"></script>
 
-testScript.src = "/js/app.js?v=7";
-
-testScript.onload = () => {
-  alert("APP.JS BERHASIL DIMUAT");
-};
-
-testScript.onerror = () => {
-  alert("APP.JS GAGAL DIMUAT");
-};
-
-document.body.appendChild(testScript);
-</script>
+</body>
 </html>
