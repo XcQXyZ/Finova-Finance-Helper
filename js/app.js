@@ -1,4 +1,3 @@
-document.body.insertAdjacentHTML("afterbegin", "<h1 style='color:red'>APP JS JALAN</h1>");
 const SUPABASE_URL = "https://krzttskzpbajyprowdqd.supabase.co";
 const SUPABASE_KEY = "sb_publishable_s760LsBrsEmoPrRJjSoC7w_cVeud0bg";
 
@@ -58,6 +57,7 @@ function addRecurringPeriod(date, frequency){
 
   return d.toISOString().slice(0, 10);
 }
+
 async function processRecurring(){
   if(!state.user || !Array.isArray(state.recurring) || !state.recurring.length){
     return;
@@ -273,8 +273,6 @@ document.querySelectorAll("[data-auth]").forEach(button => {
 
 $("authForm").onsubmit = async event => {
 
-  alert("TOMBOL LOGIN TERDETEKSI");
-  
   event.preventDefault();
 
   if (authBusy) return;
@@ -416,12 +414,11 @@ try {
 
   console.error("LOAD APP ERROR:", error);
 
-  alert("ERROR LOAD APP:\n" + (error?.message || error));
-
   $("authView").classList.remove("hidden");
   $("appView").classList.add("hidden");
 
   fail(error);
+}
 }
 
 
@@ -487,7 +484,6 @@ db.auth.onAuthStateChange(async (event, session) => {
 
 
 /* Jalankan pemeriksaan session */
-alert("JAVASCRIPT FINOVA AKTIF");
 initAuth();
 
 
@@ -1206,7 +1202,12 @@ function renderCashflowChart(){
         ]
       },
 
-      options:{animation:false,responsive:true,maintainAspectRatio:true,aspectRatio:1.5,plugins:{
+      options:{
+        animation:false,
+        responsive:true,
+        maintainAspectRatio:true,
+        aspectRatio:1.5,
+        plugins:{
           legend:{
             labels:{
               color:getComputedStyle(document.body)
@@ -2500,7 +2501,8 @@ function renderReports(){
         options:{
           animation:false,
           responsive:true,
-          maintainAspectRatio:true,aspectRatio:2
+          maintainAspectRatio:true,
+          aspectRatio:2,
 
           plugins:{
             legend:{
